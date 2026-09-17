@@ -202,13 +202,17 @@ banked, since a draw would sell their hidden worth at the bare item's price.
 ## 4. Verification status and recent history
 
 **Last Gradle run: `run-gametest.bat` on 2026-09-17 at 17:38 — build OK, "All 28 required tests passed"**
-(Gradle counts 28 in the batch for our 27 registered functions; the extra one was not investigated). No
-`derivation cycle` warning, no data errors. That run covers the whole 09-17 batch.
+(Gradle counts one more than our registered functions; the extra one was not investigated). No
+`derivation cycle` warning, no data errors. That run covers the 09-17 batch up to the release of 0.1.0
+— **it predates the 09-17 late batch** (the (i) rewrite, the Game Core, the crafting tree, Gil's
+removal), which has only been verified offline so far. Gil's game test is gone, so expect **27** now.
 
 **Released: 0.1.0** — git tag `v0.1.0` (commit `ce995c4`), jar copied to `releases/itemcasino-0.1.0.jar`
-with its `.sha256` (`releases/` is git-ignored). For the next release: bump `mod_version` in
-`gradle.properties`, `run-gametest.bat`, copy `build/libs/itemcasino-<version>.jar` into `releases/`,
-tag.
+with its `.sha256` (`releases/` is git-ignored).
+
+**0.2.0 in preparation** — `mod_version` is already bumped. What remains: `run-gametest.bat`, then copy
+`build/libs/itemcasino-0.2.0.jar` into `releases/`, write its `.sha256`, and tag `v0.2.0`. Same recipe
+for every release after it.
 
 **Not yet seen in game by Rémi:** everything of 09-17 (below), plus from 09-16: automatic payout
 delivery and the 24-tick button lock, the (i) badges in the top-right corner, the Vault banking half,

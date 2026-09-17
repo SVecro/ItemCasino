@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "GPG",
+    "ITI",
+    "IRI"
+  ],
+  "key": {
+    "G": "minecraft:gold_ingot",
+    "P": "minecraft:stone_pressure_plate",
+    "I": "minecraft:iron_ingot",
+    "T": "minecraft:tnt",
+    "R": "minecraft:redstone"
+  },
+  "result": { "id": "itemcasino:mine_field", "count": 1 }
+}

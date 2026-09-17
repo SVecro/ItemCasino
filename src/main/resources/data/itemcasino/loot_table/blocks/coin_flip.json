@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:block",
+  "random_sequence": "itemcasino:blocks/coin_flip",
+  "pools": [
+    {
+      "rolls": 1.0,
+      "bonus_rolls": 0.0,
+      "conditions": [
+        { "condition": "minecraft:survives_explosion" }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "itemcasino:coin_flip",
+          "functions": [
+            {
+              "function": "minecraft:copy_components",
+              "source": "block_entity",
+              "include": [ "minecraft:custom_name" ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

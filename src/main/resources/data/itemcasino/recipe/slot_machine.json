@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "GQG",
+    "IEI",
+    "IRI"
+  ],
+  "key": {
+    "G": "minecraft:gold_ingot",
+    "Q": "minecraft:quartz_block",
+    "I": "minecraft:iron_ingot",
+    "E": "minecraft:ender_eye",
+    "R": "minecraft:redstone_block"
+  },
+  "result": { "id": "itemcasino:slot_machine", "count": 1 }
+}

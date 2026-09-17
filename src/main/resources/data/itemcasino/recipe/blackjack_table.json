@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "PPP",
+    "GBG",
+    "WWW"
+  ],
+  "key": {
+    "P": "minecraft:green_wool",
+    "G": "minecraft:gold_ingot",
+    "B": "minecraft:book",
+    "W": "minecraft:oak_planks"
+  },
+  "result": {
+    "id": "itemcasino:blackjack_table",
+    "count": 1
+  }
+}

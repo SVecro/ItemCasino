@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:block",
+  "random_sequence": "itemcasino:blocks/predict_the_dice",
+  "pools": [
+    {
+      "rolls": 1.0,
+      "bonus_rolls": 0.0,
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "itemcasino:predict_the_dice",
+          "functions": [
+            {
+              "function": "minecraft:copy_components",
+              "source": "block_entity",
+              "include": [
+                "minecraft:custom_name"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

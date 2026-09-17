@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": ["GPG", "PBP", "GPG"],
+  "key": { "G": "minecraft:gold_nugget", "P": "minecraft:paper", "B": "itemcasino:blackjack_table" },
+  "result": { "id": "itemcasino:pocket_blackjack", "count": 1 }
+}

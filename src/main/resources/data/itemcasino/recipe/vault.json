@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [ "OGO", "GNG", "OGO" ],
+  "key": {
+    "O": "minecraft:obsidian",
+    "G": "minecraft:gold_block",
+    "N": "minecraft:nether_star"
+  },
+  "result": { "id": "itemcasino:vault", "count": 1 }
+}

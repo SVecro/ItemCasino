@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "itemcasino:closing_returns_the_stake",
+  "structure": "itemcasino:empty",
+  "max_ticks": 200,
+  "setup_ticks": 0,
+  "required": true,
+  "rotation": "none",
+  "manual_only": false,
+  "sky_access": false
+}

@@ -1,0 +1,7 @@
+{
+  "values": [
+    "#minecraft:shulker_boxes",
+    "#minecraft:bundles",
+    { "id": "#c:shulker_boxes", "required": false }
+  ]
+}

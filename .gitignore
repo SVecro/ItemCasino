@@ -1,0 +1,20 @@
+# Gradle and IDE output
+build/
+.gradle/
+out/
+.idea/
+*.iml
+.vscode/
+
+# Local runs (worlds, logs, configs of the dev client and the game-test server)
+run/
+
+# Results written by the .bat scripts
+build-errors.txt
+build-status.txt
+gametest-out.txt
+gametest-status.txt
+
+# Working files of the offline toolkit and of Claude sessions
+.offline/
+Claude outputs/

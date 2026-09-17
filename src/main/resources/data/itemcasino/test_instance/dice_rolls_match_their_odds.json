@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "itemcasino:dice_rolls_match_their_odds",
+  "structure": "itemcasino:empty",
+  "max_ticks": 400,
+  "setup_ticks": 0,
+  "required": true,
+  "rotation": "none",
+  "manual_only": false,
+  "sky_access": false
+}

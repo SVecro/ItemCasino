@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "itemcasino:block/upgrader_top",
+    "side": "itemcasino:block/upgrader_side",
+    "bottom": "itemcasino:block/casino_bottom"
+  }
+}

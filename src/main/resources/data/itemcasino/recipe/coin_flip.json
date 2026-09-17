@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IGI",
+    "GEG",
+    "IGI"
+  ],
+  "key": {
+    "I": "minecraft:iron_block",
+    "G": "minecraft:gold_ingot",
+    "E": "minecraft:ender_eye"
+  },
+  "result": {
+    "id": "itemcasino:coin_flip",
+    "count": 1
+  }
+}

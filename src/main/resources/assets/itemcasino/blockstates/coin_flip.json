@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "itemcasino:block/coin_flip" }
+  }
+}

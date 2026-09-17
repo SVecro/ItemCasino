@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    "itemcasino:upgrader",
+    "itemcasino:predict_the_dice",
+    "itemcasino:blackjack_table",
+    "itemcasino:coin_flip",
+    "itemcasino:slot_machine",
+    "itemcasino:vault",
+    "itemcasino:mine_field",
+    "itemcasino:cashier"
+  ]
+}

@@ -18,3 +18,6 @@ gametest-status.txt
 # Working files of the offline toolkit and of Claude sessions
 .offline/
 Claude outputs/
+
+# Release jars, copied from build/libs by hand (each is tagged in git)
+releases/

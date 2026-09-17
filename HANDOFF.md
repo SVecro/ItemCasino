@@ -196,13 +196,14 @@ banked, since a draw would sell their hidden worth at the bare item's price.
 
 ## 4. Verification status and recent history
 
-**Last Gradle run: `run-gametest.bat` on 2026-09-16 at 22:59 — build OK, "All 23 required tests passed"**
-(Gradle counts 23 in the batch for our 22 registered functions; the extra one was not investigated).
+**Last Gradle run: `run-gametest.bat` on 2026-09-17 at 17:38 — build OK, "All 28 required tests passed"**
+(Gradle counts 28 in the batch for our 27 registered functions; the extra one was not investigated). No
+`derivation cycle` warning, no data errors. That run covers the whole 09-17 batch.
 
-**The 2026-09-17 batch (all of `AUDIT-2026-09-17.md`) is verified offline only**: `check.sh` green,
-the data-map codec run against the real NeoForge jar. It touches server logic everywhere, adds five
-game tests (27 functions) and advancements. **The next thing to do is `run-gametest.bat`**, then
-`run-client.bat`.
+**Released: 0.1.0** — git tag `v0.1.0` (commit `ce995c4`), jar copied to `releases/itemcasino-0.1.0.jar`
+with its `.sha256` (`releases/` is git-ignored). For the next release: bump `mod_version` in
+`gradle.properties`, `run-gametest.bat`, copy `build/libs/itemcasino-<version>.jar` into `releases/`,
+tag.
 
 **Not yet seen in game by Rémi:** everything of 09-17 (below), plus from 09-16: automatic payout
 delivery and the 24-tick button lock, the (i) badges in the top-right corner, the Vault banking half,
@@ -727,14 +728,12 @@ with it everything drawn next in that tick (a mine field's layout). Outcomes now
 
 ## 9. Open items, in the order worth doing them
 
-1. **`run-gametest.bat`** for the 09-17 batch (27 tests), then **`run-client.bat`**. What to look at in
-   game: a blackjack hand closed and reopened mid-hand (the cards come back); a duel with two unequal
+1. **`run-client.bat`** (the game tests already passed). What to look at in game: a blackjack hand closed and reopened mid-hand (the cards come back); a duel with two unequal
    stakes (each chair shows its chance); the Cashier refusing cobblestone (and its (i)); a slot machine
    given a full stack (takes 16, says so, re-arms); Shift over any item (casino value); the item
    tooltips of the tables; Gil summoned with 64 ingots (56 stay on the ground); the recipe book showing
    the tables; the log with no `derivation cycle` warning. Plus the 09-16 list in §4.
-2. **Commit the Gradle wrapper** that `run-build.bat` generates on its first run (`gradlew`,
-   `gradlew.bat`, `gradle/wrapper/`), and add a private remote to the git repository.
+2. **Add a private remote** to the git repository (the Gradle wrapper is committed since 0.1.0).
 3. **Design questions still open**: should losses bank 100 % into the pot, now that the Vault destroys
    half of each offering and the ambient jackpot is gone? Iron farms and villager emeralds still convert
    to diamonds at the Cashier (their base values: iron ≈ 13, emerald 96). A pocket slot machine was

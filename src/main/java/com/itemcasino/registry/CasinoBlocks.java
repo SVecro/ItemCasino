@@ -10,6 +10,7 @@ import com.itemcasino.block.VaultBlock;
 import com.itemcasino.block.DiceBlock;
 import com.itemcasino.block.UpgraderBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
@@ -21,12 +22,20 @@ public final class CasinoBlocks {
     public static final DeferredRegister.Blocks REGISTER =
             DeferredRegister.createBlocks(ItemCasino.MOD_ID);
 
+    /**
+     * A casino table is furniture, not machinery: a wooden body on a Game Core. It breaks in the
+     * same time as a crafting table (2.5), by hand, faster with an axe, and needs no tool to drop.
+     *
+     * <p>The blast resistance stays at 12 on purpose, where a crafting table has 2.5. A table can be
+     * holding a player's escrowed stake, and while breaking one settles the session and hands
+     * everything back, a creeper is nobody's decision. Not {@code ignitedByLava} for the same reason.
+     */
     private static BlockBehaviour.Properties tableProperties(MapColor colour) {
         return BlockBehaviour.Properties.of()
                 .mapColor(colour)
-                .strength(3.5F, 12.0F)
-                .requiresCorrectToolForDrops()
-                .sound(SoundType.METAL)
+                .instrument(NoteBlockInstrument.BASS)
+                .strength(2.5F, 12.0F)
+                .sound(SoundType.WOOD)
                 .noOcclusion();
     }
 

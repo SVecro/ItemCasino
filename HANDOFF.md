@@ -159,6 +159,12 @@ banked, since a draw would sell their hidden worth at the bare item's price.
 
 * **Pocket devices** (`pocket_upgrader`, `pocket_dice`, `pocket_blackjack`): an item hosting the same
   session in memory; settled and liquidated when the screen closes.
+* **Table blocks** are wood, not machinery: `strength(2.5F, 12.0F)`, `SoundType.WOOD`, no
+  `requiresCorrectToolForDrops`, and they sit in `minecraft:mineable/axe`. So a table breaks in the
+  same time as a crafting table, by hand, faster with an axe. The blast resistance stays at 12 (a
+  crafting table has 2.5) and they are not `ignitedByLava`, because a table can be holding an
+  escrowed stake and a creeper is nobody's decision. The **Game Core** is the exception: metal sound,
+  `requiresCorrectToolForDrops`, `mineable/pickaxe`.
 * **Game Core** (`game_core`): a plain decorative block that is the one ingredient every table
   shares. 8 redstone around 1 gold ingot. It has no behaviour of its own — it exists so the crafting
   tree has a spine, and so a casino floor can show its workings.

@@ -5,8 +5,12 @@
     {
       "rolls": 1.0,
       "bonus_rolls": 0.0,
-      "conditions": [ { "condition": "minecraft:survives_explosion" } ],
-      "entries": [ { "type": "minecraft:item", "name": "itemcasino:cashier" } ]
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "itemcasino:cashier"
+        }
+      ]
     }
   ]
 }

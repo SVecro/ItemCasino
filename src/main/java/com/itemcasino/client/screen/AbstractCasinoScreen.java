@@ -329,12 +329,21 @@ public abstract class AbstractCasinoScreen<T extends AbstractCasinoMenu>
             // Captured before the packet goes out, while the stack is still in the slot: the
             // server empties it on commit, and an empty slot with no explanation reads as "the
             // game ate my item".
-            ClientSessionState.rememberWager(menu.ownWagerStack());
+            ClientSessionState.rememberWager(stakeTakenFrom(menu.ownWagerStack()));
             ClientPacketDistributor.sendToServer(new C2SPlaceWager(menu.containerId));
         }
     }
 
+    /**
+     * What a commit will take out of this stack, for the ghost drawn in the sealed slot. All of it,
+     * except at a table that takes only part (the slot machine's stake ceiling).
+     */
+    protected ItemStack stakeTakenFrom(ItemStack slot) {
+        return slot;
+    }
+
     protected void refreshWidgets() {
+
         if (betHalf != null) {
             boolean shown = betColumnShown();
             boolean live = betBarShown() && menu.gameState().acceptsItems();

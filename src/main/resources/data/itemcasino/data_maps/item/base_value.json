@@ -110,21 +110,21 @@
     "minecraft:lapis_lazuli": 8,
     "minecraft:quartz": 10,
     "minecraft:amethyst_shard": 12,
-    "minecraft:emerald": { "value": 96, "fixed": false },
-    "minecraft:diamond": { "value": 256, "fixed": true },
-    "minecraft:ancient_debris": { "value": 1024, "fixed": true },
-    "minecraft:netherite_scrap": { "value": 512, "fixed": true },
+    "minecraft:emerald": 96,
+    "minecraft:diamond": { "points": 256, "fixed": true },
+    "minecraft:ancient_debris": { "points": 1024, "fixed": true },
+    "minecraft:netherite_scrap": { "points": 512, "fixed": true },
 
     "minecraft:blaze_rod": 48,
     "minecraft:ender_pearl": 64,
     "minecraft:ghast_tear": 128,
     "minecraft:shulker_shell": 256,
-    "minecraft:nether_star": { "value": 20000, "fixed": true },
-    "minecraft:dragon_egg": { "value": 50000, "fixed": true },
-    "minecraft:elytra": { "value": 12000, "fixed": true },
-    "minecraft:totem_of_undying": { "value": 6000, "fixed": true },
-    "minecraft:heart_of_the_sea": { "value": 4000, "fixed": true },
+    "minecraft:nether_star": { "points": 20000, "fixed": true },
+    "minecraft:dragon_egg": { "points": 50000, "fixed": true },
+    "minecraft:elytra": { "points": 12000, "fixed": true },
+    "minecraft:totem_of_undying": { "points": 6000, "fixed": true },
+    "minecraft:heart_of_the_sea": { "points": 4000, "fixed": true },
     "minecraft:echo_shard": 320,
-    "minecraft:netherite_upgrade_smithing_template": { "value": 2000, "fixed": true }
+    "minecraft:netherite_upgrade_smithing_template": 2000
   }
 }

@@ -1,0 +1,16 @@
+{
+  "values": [
+    "minecraft:diamond",
+    "minecraft:diamond_block",
+    "minecraft:emerald",
+    "minecraft:emerald_block",
+    "minecraft:gold_ingot",
+    "minecraft:gold_block",
+    "minecraft:gold_nugget",
+    "minecraft:iron_ingot",
+    "minecraft:iron_block",
+    "minecraft:iron_nugget",
+    "minecraft:copper_ingot",
+    "minecraft:copper_block"
+  ]
+}

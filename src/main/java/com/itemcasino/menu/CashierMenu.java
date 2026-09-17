@@ -8,6 +8,7 @@ import com.itemcasino.core.value.Fixed;
 import com.itemcasino.player.CasinoMailbox;
 import com.itemcasino.registry.CasinoBlocks;
 import com.itemcasino.registry.CasinoMenus;
+import com.itemcasino.registry.CasinoTags;
 import com.itemcasino.valuation.ItemFilter;
 import com.itemcasino.valuation.StackValuator;
 import com.itemcasino.valuation.ValuationEngine;
@@ -146,7 +147,8 @@ public class CashierMenu extends AbstractContainerMenu {
         addSlot(new Slot(counter, DEPOSIT_SLOT, DEPOSIT_X, DEPOSIT_Y) {
             @Override
             public boolean mayPlace(ItemStack stack) {
-                return !ItemFilter.holdsItems(stack);
+                // Tags are synced, so the slot refuses the same things on both sides.
+                return ChipCards.isCard(stack) || acceptsDeposit(stack);
             }
         });
         for (int row = 0; row < 3; row++) {
@@ -196,8 +198,18 @@ public class CashierMenu extends AbstractContainerMenu {
         }
     }
 
+    /**
+     * What the counter takes: the currencies of the {@code itemcasino:cashier_accepts} tag, plain.
+     * Everything else is played at the tables, at the house's edge.
+     */
+    public static boolean acceptsDeposit(ItemStack stack) {
+        return !stack.isEmpty() && ItemFilter.isTagged(stack.getItem(), CasinoTags.CASHIER_ACCEPTS)
+                && !ItemFilter.holdsItems(stack) && !ItemFilter.isComponentDriven(stack);
+    }
+
     /** The chips a stack is exchanged for, or 0 when the cashier will not take it. */
     private static long depositCents(ItemStack stack, ValuationSnapshot snapshot) {
+        if (!acceptsDeposit(stack)) return 0;
         if (StackValuator.reject(stack, snapshot) != null) return 0;
         long value = StackValuator.value(stack, snapshot);
         return value == Fixed.INF ? 0 : Chips.centsForValue(value);
@@ -219,6 +231,10 @@ public class CashierMenu extends AbstractContainerMenu {
                 return;
             }
         } else {
+            if (!acceptsDeposit(stack)) {
+                player.displayClientMessage(Component.translatable("itemcasino.reject.cashier_currency"), true);
+                return;
+            }
             ValuationSnapshot snapshot = ValuationEngine.snapshot();
             StackValuator.Rejection rejection = StackValuator.reject(stack, snapshot);
             if (rejection != null) {
@@ -237,7 +253,7 @@ public class CashierMenu extends AbstractContainerMenu {
         counter.setItem(DEPOSIT_SLOT, ItemStack.EMPTY);
         counter.setItem(CARD_SLOT, card);
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[cashier] {} deposited {} for {} chip cents (balance {})",
+            ItemCasino.AUDIT.info("[cashier] {} deposited {} for {} chip cents (balance {})",
                     player.getName().getString(), stack, credit, ChipCards.balance(card));
         }
     }
@@ -272,7 +288,7 @@ public class CashierMenu extends AbstractContainerMenu {
         // Inventory first; what does not fit waits in the casino mailbox rather than on the floor.
         CasinoMailbox.send(player.level().getServer(), player.getUUID(), stacks);
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[cashier] {} withdrew {}x{} for {} chip cents (balance {})",
+            ItemCasino.AUDIT.info("[cashier] {} withdrew {}x{} for {} chip cents (balance {})",
                     player.getName().getString(), wanted, BuiltInRegistries.ITEM.getKey(item), cost,
                     balance - cost);
         }
@@ -280,10 +296,31 @@ public class CashierMenu extends AbstractContainerMenu {
 
     // ------------------------------------------------------------------ vanilla contract
 
+    /**
+     * The counter's two slots go back to the player, like a crafting grid's. Vanilla's
+     * {@code clearContainer} throws them on the ground for a player who is dead or disconnecting,
+     * which for a bearer Chip Card means handing it to whoever passes; the casino mailbox keeps them
+     * for their owner instead.
+     */
     @Override
     public void removed(Player player) {
         super.removed(player);
-        access.execute((level, pos) -> clearContainer(player, counter));
+        access.execute((level, pos) -> {
+            if (player instanceof ServerPlayer serverPlayer
+                    && (!serverPlayer.isAlive() || serverPlayer.hasDisconnected() || serverPlayer.isRemoved())) {
+                List<ItemStack> stacks = new ArrayList<>(2);
+                for (int i = 0; i < counter.getContainerSize(); i++) {
+                    ItemStack stack = counter.removeItemNoUpdate(i);
+                    if (!stack.isEmpty()) stacks.add(stack);
+                }
+                if (!stacks.isEmpty()
+                        && !CasinoMailbox.send(serverPlayer.level().getServer(), serverPlayer.getUUID(), stacks)) {
+                    stacks.forEach(stack -> serverPlayer.drop(stack, false));
+                }
+                return;
+            }
+            clearContainer(player, counter);
+        });
     }
 
     @Override

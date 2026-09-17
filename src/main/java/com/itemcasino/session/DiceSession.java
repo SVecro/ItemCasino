@@ -166,7 +166,6 @@ public class DiceSession extends CasinoSession {
         this.deadlineTick = host.hostLevel().getGameTime() + spinTicks + 40L;
         beginCommit(player, spinTicks);
         touch();
-        onWagerCommitted(player);
 
         int rolled = roll;
         boolean win = decidedWin;
@@ -175,12 +174,18 @@ public class DiceSession extends CasinoSession {
         host.broadcast(id -> new S2CDiceResult(id, sessionId, rolled, win, dirOver, bet, spinTicks));
 
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[wager] {} dice session={} stake={}c bet={} {} x{}ppm roll={} win={}",
+            ItemCasino.AUDIT.info("[wager] {} dice session={} stake={}c bet={} {} x{}ppm roll={} win={}",
                     player.getName().getString(), sessionId, stakeCents, betChance,
                     betOver ? "over" : "under", betMultiplierPpm, roll, decidedWin);
         }
         return true;
     }
+
+    @Override
+    public boolean commitWager(ServerPlayer player) { return placeWager(player); }
+
+    @Override
+    public boolean acknowledge(long claimedSession) { return finishRoll(claimedSession); }
 
     public boolean finishRoll(long claimedSession) {
         if (state != GameState.ROLLING) return false;
@@ -196,20 +201,8 @@ public class DiceSession extends CasinoSession {
     }
 
     private void settle() {
-        if (!setState(GameState.SETTLING)) return;
-        materialiseDecidedOutcome();
-        recordOutcome(stakedValue(), returnedValue());
-        bankLoss();
-        escrow = ItemStack.EMPTY;
-        deadlineTick = 0;
-        setState(payout.isEmpty() ? GameState.IDLE : GameState.PAYOUT_PENDING);
-        returnCardsToSlots();
-        touch();
-        if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[settle] dice session={} roll={} win={} payout={}",
-                    sessionId, roll, decidedWin, payout);
-        }
-        broadcastPayout();
+        settleHouseWager(() -> ItemCasino.AUDIT.info("[settle] dice session={} roll={} win={} payout={}",
+                sessionId, roll, decidedWin, payout));
     }
 
     /**

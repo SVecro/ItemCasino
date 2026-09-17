@@ -46,6 +46,12 @@ public abstract class AbstractCasinoBlock extends BaseEntityBlock {
             buffer.writeBoolean(false);
             buffer.writeBlockPos(pos);
         });
+        // Only once the menu is open: what the session sends a returning viewer has to be addressed
+        // to that menu's container id.
+        if (serverPlayer.containerMenu instanceof com.itemcasino.menu.AbstractCasinoMenu menu
+                && menu.session() == table.session()) {
+            table.session().onViewerOpened(serverPlayer);
+        }
         return InteractionResult.CONSUME;
     }
 
@@ -53,25 +59,13 @@ public abstract class AbstractCasinoBlock extends BaseEntityBlock {
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state,
                                                                   BlockEntityType<T> type) {
         if (level.isClientSide()) return null;
-        BlockEntityTicker<T> ticker = createTickerHelper(type,
-                CasinoBlockEntities.UPGRADER.get(), AbstractCasinoBlockEntity::serverTick);
-        if (ticker != null) return ticker;
-        ticker = createTickerHelper(type, CasinoBlockEntities.DICE.get(),
-                AbstractCasinoBlockEntity::serverTick);
-        if (ticker != null) return ticker;
-        ticker = createTickerHelper(type, CasinoBlockEntities.BLACKJACK_TABLE.get(),
-                AbstractCasinoBlockEntity::serverTick);
-        if (ticker != null) return ticker;
-        ticker = createTickerHelper(type, CasinoBlockEntities.COIN_FLIP.get(),
-                AbstractCasinoBlockEntity::serverTick);
-        if (ticker != null) return ticker;
-        ticker = createTickerHelper(type, CasinoBlockEntities.SLOT_MACHINE.get(),
-                AbstractCasinoBlockEntity::serverTick);
-        if (ticker != null) return ticker;
-        ticker = createTickerHelper(type, CasinoBlockEntities.VAULT.get(),
-                AbstractCasinoBlockEntity::serverTick);
-        if (ticker != null) return ticker;
-        return createTickerHelper(type, CasinoBlockEntities.MINE_FIELD.get(),
-                AbstractCasinoBlockEntity::serverTick);
+        // Every table's block entity is a casino table, so one ticker serves them all; a table added
+        // later does not need a line of its own here.
+        return (tickLevel, tickPos, tickState, blockEntity) -> {
+            if (blockEntity instanceof AbstractCasinoBlockEntity table) {
+                AbstractCasinoBlockEntity.serverTick(tickLevel, tickPos, tickState, table);
+            }
+        };
     }
+
 }

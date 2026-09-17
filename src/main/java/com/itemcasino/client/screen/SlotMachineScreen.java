@@ -14,6 +14,7 @@ import com.itemcasino.client.CasinoSounds;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Three reels, a paytable either side, and one button.
@@ -148,14 +149,30 @@ public class SlotMachineScreen extends AbstractCasinoScreen<SlotMachineMenu> {
         }
     }
 
+    /** The machine's ceiling on an item stake, as the server reports it. */
+    private int maxItemStake() {
+        int most = menu.readout(com.itemcasino.session.SlotMachineSession.READOUT_MAX_ITEMS);
+        return most > 0 ? most : Integer.MAX_VALUE;
+    }
+
+    @Override
+    protected ItemStack stakeTakenFrom(ItemStack slot) {
+        if (com.itemcasino.chips.ChipCards.isCard(slot) || slot.getCount() <= maxItemStake()) return slot;
+        return slot.copyWithCount(maxItemStake());
+    }
+
     private Component status() {
+
         if (!ClientSlotState.allStopped()) {
             return Component.translatable("itemcasino.label.slots_spinning");
         }
         if (!ClientSlotState.spinning()) {
-            return menu.gameState() == GameState.ARMED
-                    ? Component.translatable("itemcasino.label.slots_ready")
-                    : Component.translatable("itemcasino.label.slots_idle");
+            if (menu.gameState() != GameState.ARMED) return Component.translatable("itemcasino.label.slots_idle");
+            ItemStack slot = menu.ownWagerStack();
+            int most = maxItemStake();
+            return !com.itemcasino.chips.ChipCards.isCard(slot) && slot.getCount() > most
+                    ? Component.translatable("itemcasino.label.slots_takes_part", most)
+                    : Component.translatable("itemcasino.label.slots_ready");
         }
         SlotOutcome outcome = ClientSlotState.outcome();
         if (!outcome.paysAnything()) {

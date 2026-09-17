@@ -1,6 +1,6 @@
 #!/bin/bash
 # Compiles all of src/main/java against the real NeoForge classpath (see setup.sh).
-# A clean tree prints six [removal] warnings (makeMockServerPlayerInLevel x3, Items.registerItem x3).
+# A clean tree prints no [removal] warning (the one unavoidable call, makeMockServerPlayerInLevel, is suppressed in place).
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="$ROOT/.offline/classes"
 rm -rf "$OUT" && mkdir -p "$OUT"

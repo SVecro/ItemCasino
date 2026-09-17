@@ -11,6 +11,8 @@ import com.itemcasino.client.screen.VaultScreen;
 import com.itemcasino.client.screen.UpgraderScreen;
 import com.itemcasino.client.render.GoblinRenderer;
 import com.itemcasino.registry.CasinoEntities;
+import com.itemcasino.registry.CasinoItems;
+import net.minecraft.client.Minecraft;
 import com.itemcasino.registry.CasinoMenus;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -46,12 +48,51 @@ public final class ItemCasinoClient {
     /** A chip card shows what it holds. The balance lives on the stack, so this is only a reading of it. */
     @SubscribeEvent
     public static void onItemTooltip(net.neoforged.neoforge.event.entity.player.ItemTooltipEvent event) {
-        if (!com.itemcasino.chips.ChipCards.isCard(event.getItemStack())) return;
-        long cents = com.itemcasino.chips.ChipCards.balance(event.getItemStack());
-        event.getToolTip().add(net.minecraft.network.chat.Component.translatable("itemcasino.card.balance",
-                com.itemcasino.client.render.ChipText.format(cents)).withStyle(net.minecraft.ChatFormatting.GOLD));
-        event.getToolTip().add(net.minecraft.network.chat.Component.translatable("itemcasino.card.bearer")
-                .withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        net.minecraft.world.item.ItemStack stack = event.getItemStack();
+        java.util.List<net.minecraft.network.chat.Component> lines = event.getToolTip();
+        if (com.itemcasino.chips.ChipCards.isCard(stack)) {
+            long cents = com.itemcasino.chips.ChipCards.balance(stack);
+            lines.add(net.minecraft.network.chat.Component.translatable("itemcasino.card.balance",
+                    com.itemcasino.client.render.ChipText.format(cents)).withStyle(net.minecraft.ChatFormatting.GOLD));
+            lines.add(net.minecraft.network.chat.Component.translatable("itemcasino.card.bearer")
+                    .withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+            return;
+        }
+        String rules = rulesKey(stack);
+        if (rules != null) {
+            lines.add(net.minecraft.network.chat.Component.translatable(rules)
+                    .withStyle(net.minecraft.ChatFormatting.GRAY));
+        }
+        // What the casino would price it at, while Shift is held: the only place outside a table
+        // where a player can see the number the tables use. The advisory table lists items that can
+        // be Upgrader targets; anything else simply shows nothing.
+        if (Minecraft.getInstance().hasShiftDown() && ClientValueCache.isReady()) {
+            long value = ClientValueCache.value(stack.getItem());
+            if (value != com.itemcasino.core.value.Fixed.INF && value > 0) {
+                lines.add(net.minecraft.network.chat.Component.translatable("itemcasino.tooltip.value",
+                        com.itemcasino.client.render.ChipText.format(com.itemcasino.core.chips.Chips.centsForValue(value)))
+                        .withStyle(net.minecraft.ChatFormatting.GOLD));
+            }
+        }
+    }
+
+    /** The one-line description of a casino block or pocket device, or null for anything else. */
+    @javax.annotation.Nullable
+    private static String rulesKey(net.minecraft.world.item.ItemStack stack) {
+        net.minecraft.world.item.Item item = stack.getItem();
+        if (item == CasinoItems.UPGRADER.get()) return "itemcasino.tooltip.upgrader_edge";
+        if (item == CasinoItems.DICE.get()) return "itemcasino.tooltip.dice";
+        if (item == CasinoItems.BLACKJACK_TABLE.get()) return "itemcasino.tooltip.blackjack_edge";
+        if (item == CasinoItems.COIN_FLIP.get()) return "itemcasino.tooltip.coin_flip_edge";
+        if (item == CasinoItems.SLOT_MACHINE.get()) return "itemcasino.tooltip.slot_edge";
+        if (item == CasinoItems.VAULT.get()) return "itemcasino.tooltip.vault";
+        if (item == CasinoItems.MINE_FIELD.get()) return "itemcasino.tooltip.mine_field";
+        if (item == CasinoItems.CASHIER.get()) return "itemcasino.tooltip.cashier";
+        if (item == CasinoItems.POCKET_UPGRADER.get() || item == CasinoItems.POCKET_DICE.get()
+                || item == CasinoItems.POCKET_BLACKJACK.get()) {
+            return "itemcasino.tooltip.pocket";
+        }
+        return null;
     }
 
     @SubscribeEvent

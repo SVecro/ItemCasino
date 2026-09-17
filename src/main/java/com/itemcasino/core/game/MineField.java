@@ -18,8 +18,8 @@ import java.math.BigInteger;
  * tile with three mines); with many it is a real leap.
  *
  * <p>Zero tiles is ×1 with no edge: backing out before turning anything over is a refund, since the
- * player has learnt nothing. The ambient jackpot chance is therefore offered on the first safe tile,
- * not on commit, or commit-and-cancel would be a free lottery ticket.
+ * player has learnt nothing.
+
  *
  * <p>Arithmetic is exact ({@link BigInteger}) so the server's payout and the client's label can never
  * disagree by a rounding.

@@ -192,19 +192,24 @@ public class UpgraderSession extends CasinoSession {
         this.deadlineTick = host.hostLevel().getGameTime() + spinTicks + 40L;
         beginCommit(player, spinTicks);
         touch();
-        onWagerCommitted(player);
 
         host.broadcast(id -> new S2CSessionStarted(id, sessionId, gameType(), frozenPpm));
         host.broadcast(id -> new S2CWheelResult(id, sessionId, decidedWin, stopAngle, spinTicks));
 
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[wager] {} upgrader session={} wager={}x{} chips={}c target={} odds={}ppm win={}",
+            ItemCasino.AUDIT.info("[wager] {} upgrader session={} wager={}x{} chips={}c target={} odds={}ppm win={}",
                     player.getName().getString(), sessionId, escrow.getCount(),
                     BuiltInRegistries.ITEM.getKey(escrow.getItem()), stakeCents,
                     BuiltInRegistries.ITEM.getKey(target), ppm, decidedWin);
         }
         return true;
     }
+
+    @Override
+    public boolean commitWager(ServerPlayer player) { return placeWager(player); }
+
+    @Override
+    public boolean acknowledge(long claimedSession) { return finishSpin(claimedSession); }
 
     public boolean finishSpin(long claimedSession) {
         if (state != GameState.ROLLING) return false;
@@ -221,23 +226,10 @@ public class UpgraderSession extends CasinoSession {
 
     private void settle() {
         // ROLLING -> SETTLING is the one-way door: a replayed packet finds SETTLING or later and
-        // this method has already returned by the time it arrives.
-        if (!setState(GameState.SETTLING)) return;
-        materialiseDecidedOutcome();
-        recordOutcome(stakedValue(), returnedValue());
-        // Banked before it is released: the wager is consumed whether the wheel landed on gold or
-        // not, so on this table every spin feeds the pot.
-        bankLoss();
-        escrow = ItemStack.EMPTY;               // consumed either way; the wager is gone
-        deadlineTick = 0;
-        setState(payout.isEmpty() ? GameState.IDLE : GameState.PAYOUT_PENDING);
-        returnCardsToSlots();
-        touch();
-        if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[settle] upgrader session={} win={} payout={}",
-                    sessionId, decidedWin, payout);
-        }
-        broadcastPayout();
+        // returns at once. The wager is consumed whether the wheel landed on gold or not, so on this
+        // table every spin feeds the pot.
+        settleHouseWager(() -> ItemCasino.AUDIT.info("[settle] upgrader session={} win={} payout={}",
+                sessionId, decidedWin, payout));
     }
 
     @Override
@@ -245,8 +237,10 @@ public class UpgraderSession extends CasinoSession {
         if (!decidedWin || target == null) {
             payout.clear();
         } else {
-            setPayout(PayoutResolver.exact(target,
-                    Math.max(1, outputCount * CasinoConfig.SERVER.upgraderOutputCount.get())));
+            // Exactly the count the odds were priced against. A server-wide multiplier on top of it
+            // (the old upgrader.output_count) paid N times the prize at the odds of one.
+            setPayout(PayoutResolver.exact(target, Math.max(1, outputCount)));
+
         }
         // A chip stake is spent either way, like an item stake; the card itself comes back.
         payChips(0L);

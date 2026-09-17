@@ -54,7 +54,20 @@ public class SlotMachineSession extends CasinoSession {
     @Override
     public long maxBetChips() { return CasinoConfig.SERVER.slotMaxStakeChips.get(); }
 
+    /** Read-out 0: the most items one pull takes, so the screen can say when only part of a stack goes in. */
+    public static final int READOUT_MAX_ITEMS = 0;
+
+    public static int maxItemStake() {
+        return Math.max(1, CasinoConfig.SERVER.slotMaxStake.get());
+    }
+
+    @Override
+    public int readout(int index) {
+        return index == READOUT_MAX_ITEMS ? maxItemStake() : 0;
+    }
+
     /** The three faces packed into one int for the menu's data channel, or -1 when idle. */
+
     @Override
     public int reelState() {
         if (state == GameState.IDLE || state == GameState.ARMED) return -1;
@@ -81,18 +94,21 @@ public class SlotMachineSession extends CasinoSession {
         if (!checkStake(player, snapshot)) return false;
         // The top prize is hundreds of times the stake. Without a ceiling on what goes in, one
         // lucky pull on a full stack of something valuable empties a server's economy into one
-        // player's inventory -- and five hundred stacks do not fit in it anyway. A chip bet is
-        // capped by maxBetChips instead.
-        int maxStake = CasinoConfig.SERVER.slotMaxStake.get();
-        if (!ChipCards.isCard(stack) && stack.getCount() > maxStake) {
-            player.displayClientMessage(
-                    Component.translatable("itemcasino.reject.stake_too_large", maxStake), true);
-            return false;
-        }
+        // player's inventory -- and five hundred stacks do not fit in it anyway. A bigger stack is
+        // not refused: the machine takes what it allows and leaves the rest in the slot, the way the
+        // Vault takes only the useful part of an offering. A chip bet is capped by maxBetChips.
+        int maxStake = maxItemStake();
 
         this.frozenSnapshot = snapshot;
         this.sessionId++;
-        escrowStake();
+        if (ChipCards.isCard(stack) || stack.getCount() <= maxStake) {
+            escrowStake();
+        } else {
+            escrowPartial(maxStake);
+            stakeCents = 0;
+            chipPayoutCents = 0;
+            chipWin = false;
+        }
         if (!setState(GameState.LOCKED)) return false;
 
         RandomSource rng = host.random();
@@ -111,14 +127,13 @@ public class SlotMachineSession extends CasinoSession {
         this.deadlineTick = host.hostLevel().getGameTime() + spinTicks + 2L * stagger + 40L;
         beginCommit(player, spinTicks + 2L * stagger);
         touch();
-        onWagerCommitted(player);
 
         host.broadcast(id -> new S2CSessionStarted(id, sessionId, gameType(), frozenPpm));
         host.broadcast(id -> new S2CSlotResult(id, sessionId, (byte) left, (byte) middle,
                 (byte) right, spinTicks, stagger));
 
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[wager] {} slots session={} wager={}x{} chips={}c reels={}/{}/{} pays={}x",
+            ItemCasino.AUDIT.info("[wager] {} slots session={} wager={}x{} chips={}c reels={}/{}/{} pays={}x",
                     player.getName().getString(), sessionId, escrow.getCount(),
                     BuiltInRegistries.ITEM.getKey(escrow.getItem()), stakeCents,
                     outcome.leftSymbol(), outcome.middleSymbol(), outcome.rightSymbol(), multiplier);
@@ -133,6 +148,12 @@ public class SlotMachineSession extends CasinoSession {
                 : com.itemcasino.network.s2c.S2CPayoutReady.TIER_WIN;
     }
 
+    @Override
+    public boolean commitWager(ServerPlayer player) { return placeWager(player); }
+
+    @Override
+    public boolean acknowledge(long claimedSession) { return finishSpin(claimedSession); }
+
     public boolean finishSpin(long claimedSession) {
         if (state != GameState.ROLLING) return false;
         if (claimedSession != 0 && claimedSession != sessionId) return false;
@@ -146,20 +167,8 @@ public class SlotMachineSession extends CasinoSession {
     }
 
     private void settle() {
-        if (!setState(GameState.SETTLING)) return;
-        materialiseDecidedOutcome();
-        recordOutcome(stakedValue(), returnedValue());
-        bankLoss();
-        escrow = ItemStack.EMPTY;
-        deadlineTick = 0;
-        setState(payout.isEmpty() ? GameState.IDLE : GameState.PAYOUT_PENDING);
-        returnCardsToSlots();
-        touch();
-        if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[settle] slots session={} multiplier={} payout={}",
-                    sessionId, multiplier, payout);
-        }
-        broadcastPayout();
+        settleHouseWager(() -> ItemCasino.AUDIT.info("[settle] slots session={} multiplier={} payout={}",
+                sessionId, multiplier, payout));
     }
 
     /**

@@ -175,7 +175,7 @@ public class CasinoMailbox extends SavedData {
             }
         }
         if (kept > 0) {
-            ItemCasino.LOGGER.info("[mailbox] kept {} items for {}", kept, owner);
+            ItemCasino.AUDIT.info("[mailbox] kept {} items for {}", kept, owner);
             if (present) {
                 player.displayClientMessage(Component.translatable("itemcasino.mailbox.waiting", kept)
                         .withStyle(ChatFormatting.YELLOW), false);

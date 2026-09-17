@@ -100,7 +100,17 @@ public class CoinFlipScreen extends AbstractCasinoScreen<CoinFlipMenu> {
     /** A stake's worth, or a dash while the chair is empty. */
     private Component stake(int seat) {
         int milli = menu.stakeMilli(seat);
-        return milli < 0 ? Component.literal("--") : Component.literal(Fixed.format(milli * 1000L));
+        if (milli < 0) return Component.literal("--");
+        Component value = Component.literal(Fixed.format(milli * 1000L));
+        int other = menu.stakeMilli(seat == 0 ? 1 : 0);
+        if (other <= 0 || milli <= 0) return value;
+        // The coin is weighted by the stakes, so each chair's chance is part of what it is shown.
+        int chanceA = com.itemcasino.core.game.DuelOdds.seatAChancePpm(
+                seat == 0 ? milli : other, seat == 0 ? other : milli);
+        int chance = seat == 0 ? chanceA : com.itemcasino.core.game.DuelOdds.PPM - chanceA;
+        return value.copy().append(Component.literal(" · "))
+                .append(Component.translatable("itemcasino.label.duel_chance",
+                        com.itemcasino.client.render.InfoBadge.percent(chance)));
     }
 
     /**

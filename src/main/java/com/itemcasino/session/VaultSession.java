@@ -109,10 +109,23 @@ public class VaultSession extends CasinoSession {
     /** The pot's worth, and the useful part of the offering, in thousandths. */
     @Override
     public int stakeMilli(int seat) {
-        long value = seat == 0
-                ? Jackpot.of(host.hostLevel()).totalValue(ValuationEngine.snapshot())
-                : currentQuote().offered();
-        return milli(value);
+        return milli(seat == 0 ? displayedPotValue() : currentQuote().offered());
+    }
+
+    private long potValueTick = Long.MIN_VALUE;
+    private long potValue;
+
+    /**
+     * The pot's worth for the screen, priced once a tick. The data channel asks for it once per
+     * viewer per tick, and each answer walked the whole pot. Never used to price a draw.
+     */
+    private long displayedPotValue() {
+        long now = host.hostLevel().getGameTime();
+        if (now != potValueTick) {
+            potValue = Jackpot.of(host.hostLevel()).totalValue(ValuationEngine.snapshot());
+            potValueTick = now;
+        }
+        return potValue;
     }
 
     /** Odds, prize and ceiling, for the screen. */
@@ -266,11 +279,21 @@ public class VaultSession extends CasinoSession {
         ValuationSnapshot snapshot = ValuationEngine.snapshot();
         if (!checkStake(player, snapshot)) return false;
         if (com.itemcasino.chips.ChipCards.isCard(stack)) return placeChipWager(player, snapshot);
+        // The pot is priced by the same engine as the offering, which cannot see what a potion or an
+        // enchanted book carries in its data. Banked at the bare item's price, that hidden worth
+        // would be sold on by the next draw for a fraction of what it is.
+        if (com.itemcasino.valuation.ItemFilter.isComponentDriven(stack)) {
+            player.displayClientMessage(Component.translatable("itemcasino.reject.component_driven"), true);
+            return false;
+        }
         // Only the useful part is taken; the rest stays in the slot rather than being swallowed
         // for a chance that was already at its ceiling.
         ItemStack taken = usefulPart(stack);
+
         long offered = offeredValue(taken);
-        if (offered < CasinoConfig.SERVER.jackpotDrawMinValue.get()) {
+        // Values are micro-points; the setting is in points. Compared raw, "10" meant a hundred
+        // thousandth of a point and every offering passed.
+        if (offered < Fixed.ofPoints(CasinoConfig.SERVER.jackpotDrawMinValue.get())) {
             player.displayClientMessage(Component.translatable("itemcasino.reject.offering_too_small"),
                     true);
             return false;
@@ -313,7 +336,8 @@ public class VaultSession extends CasinoSession {
         long chips = usefulChips();
         long cents = Chips.centsOfChips(chips);
         long offered = Chips.valueOfCents(cents);
-        if (offered < CasinoConfig.SERVER.jackpotDrawMinValue.get()) {
+        if (offered < Fixed.ofPoints(CasinoConfig.SERVER.jackpotDrawMinValue.get())) {
+
             player.displayClientMessage(Component.translatable("itemcasino.reject.offering_too_small"), true);
             return false;
         }
@@ -357,7 +381,7 @@ public class VaultSession extends CasinoSession {
         offeredValue = offered;
         long won = prize == null ? 0L : prize.value();
 
-        ItemCasino.LOGGER.info("[jackpot] {} drew at {}ppm for {}% ({}) of a pot of {} -- {}",
+        ItemCasino.AUDIT.info("[jackpot] {} drew at {}ppm for {}% ({}) of a pot of {} -- {}",
                 player.getName().getString(), drawPpm, sharePercent, Fixed.format(prizeValue),
                 Fixed.format(pot), tookIt ? "TOOK IT" : "nothing");
 
@@ -366,7 +390,18 @@ public class VaultSession extends CasinoSession {
         return true;
     }
 
+    @Override
+    public boolean commitWager(ServerPlayer player) { return placeWager(player); }
+
+    @Override
+    public boolean acknowledge(long claimedSession) { return finishDraw(claimedSession); }
+
+    /** The offering went into the pot at commit; the settle has nothing further to bank. */
+    @Override
+    protected boolean banksLosses() { return false; }
+
     public boolean finishDraw(long claimedSession) {
+
         if (state != GameState.ROLLING) return false;
         if (claimedSession != 0 && claimedSession != sessionId) return false;
         settle();
@@ -389,6 +424,8 @@ public class VaultSession extends CasinoSession {
         deadlineTick = 0;
         setState(payout.isEmpty() ? GameState.IDLE : GameState.PAYOUT_PENDING);
         returnCardsToSlots();
+        rearmIfStakeLeft();
+
         touch();
         broadcastPayout();
         prize = null;
@@ -437,6 +474,19 @@ public class VaultSession extends CasinoSession {
         boolean holding = state.holdsEscrow();
         boolean chipOffering = stakeCents > 0 && com.itemcasino.chips.ChipCards.isCard(escrow);
         super.repairAfterLoad();
+        if (holding) {
+            // The base class booked the offering against the chips it paid; a draw also pays items,
+            // and a won draw is a jackpot in the stats.
+            final java.util.UUID owner = wagerOwner;
+            final long offered = offeredValue;
+            final long won = prize == null ? 0L : prize.value();
+            restoredBookkeeping = level -> {
+                recordOutcome(owner, offered, won);
+                if (owner != null && won > 0) {
+                    com.itemcasino.player.CasinoStats.recordJackpot(level.getServer(), owner, won);
+                }
+            };
+        }
         if (!holding || prize == null || prize.isEmpty()) {
             prize = null;
             return;

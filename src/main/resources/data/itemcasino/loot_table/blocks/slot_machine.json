@@ -5,14 +5,18 @@
     {
       "rolls": 1.0,
       "bonus_rolls": 0.0,
-      "conditions": [ { "condition": "minecraft:survives_explosion" } ],
       "entries": [
         {
           "type": "minecraft:item",
           "name": "itemcasino:slot_machine",
           "functions": [
-            { "function": "minecraft:copy_components", "source": "block_entity",
-              "include": [ "minecraft:custom_name" ] }
+            {
+              "function": "minecraft:copy_components",
+              "source": "block_entity",
+              "include": [
+                "minecraft:custom_name"
+              ]
+            }
           ]
         }
       ]

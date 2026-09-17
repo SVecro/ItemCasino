@@ -26,11 +26,9 @@ import com.itemcasino.player.CasinoMailbox;
 import com.itemcasino.player.CasinoStats;
 import com.itemcasino.session.BlackjackSession;
 import com.itemcasino.session.CasinoSession;
-import com.itemcasino.session.CoinFlipSession;
+
 import com.itemcasino.session.MineFieldSession;
-import com.itemcasino.session.SlotMachineSession;
-import com.itemcasino.session.VaultSession;
-import com.itemcasino.session.DiceSession;
+
 import com.itemcasino.session.UpgraderSession;
 import com.itemcasino.valuation.ValuationEngine;
 import net.minecraft.network.chat.Component;
@@ -104,13 +102,13 @@ public final class ServerHandlers {
 
     public static void placeWager(C2SPlaceWager msg, IPayloadContext context) {
         on(context, () -> resolve(context, msg.containerId()).ifPresent(ctx -> {
-            if (ctx.session() instanceof UpgraderSession upgrader) upgrader.placeWager(ctx.player());
-            else if (ctx.session() instanceof DiceSession dice) dice.placeWager(ctx.player());
-            else if (ctx.session() instanceof BlackjackSession blackjack) blackjack.placeWager(ctx.player());
-            else if (ctx.session() instanceof CoinFlipSession duel) duel.placeWager(ctx.player());
-            else if (ctx.session() instanceof SlotMachineSession slots) slots.placeWager(ctx.player());
-            else if (ctx.session() instanceof VaultSession vault) vault.placeWager(ctx.player());
-            else if (ctx.session() instanceof MineFieldSession field) field.placeWager(ctx.player());
+            // Checked here rather than per game so a table added later cannot miss it. A switched-off
+            // table still opens, so nothing already in a slot is stranded.
+            if (com.itemcasino.CasinoConfig.isGameDisabled(ctx.session().gameType())) {
+                ctx.player().displayClientMessage(Component.translatable("itemcasino.reject.game_disabled"), true);
+                return;
+            }
+            ctx.session().commitWager(ctx.player());
         }), "place_wager");
     }
 
@@ -129,12 +127,7 @@ public final class ServerHandlers {
             // very next tick and span as fast as the rate limiter allowed. Refusing it costs nothing:
             // the deadline settles the wager a moment later.
             if (!ctx.session().acknowledgementDue()) return;
-            if (ctx.session() instanceof UpgraderSession upgrader) upgrader.finishSpin(msg.sessionId());
-            else if (ctx.session() instanceof DiceSession dice) dice.finishRoll(msg.sessionId());
-            else if (ctx.session() instanceof CoinFlipSession duel) duel.finishFlip(msg.sessionId());
-            else if (ctx.session() instanceof SlotMachineSession slots) slots.finishSpin(msg.sessionId());
-            else if (ctx.session() instanceof VaultSession vault) vault.finishDraw(msg.sessionId());
-            else if (ctx.session() instanceof BlackjackSession blackjack) blackjack.finishReveal(msg.sessionId());
+            ctx.session().acknowledge(msg.sessionId());
         }), "animation_complete");
     }
 
@@ -178,6 +171,16 @@ public final class ServerHandlers {
             if (!RateLimiter.allow(player)) return;
             if (!(player.containerMenu instanceof CashierMenu menu)) return;
             if (menu.containerId != msg.containerId() || !menu.stillValid(player)) return;
+            if (com.itemcasino.CasinoConfig.isDisabled("cashier")) {
+                player.displayClientMessage(Component.translatable("itemcasino.reject.game_disabled"), true);
+                return;
+            }
+            // The same rule as the tables: items conjured in creative mode are not a stake, and chips
+            // bought with them are not either.
+            if (!com.itemcasino.CasinoConfig.SERVER.allowCreative.get() && player.getAbilities().instabuild) {
+                player.displayClientMessage(Component.translatable("itemcasino.reject.creative"), true);
+                return;
+            }
             if (msg.action() == C2SCashierAction.DEPOSIT) menu.deposit(player);
             else if (msg.action() == C2SCashierAction.WITHDRAW) menu.withdraw(player, msg.currency(), msg.count());
         }, "cashier_action");
@@ -223,11 +226,28 @@ public final class ServerHandlers {
         CasinoNetwork.send(player, S2CStats.of(entry, pending, pot));
     }
 
+    /**
+     * The whole advisory table, a thousand entries and more, answered to a one-byte request. Once a
+     * snapshot per player is enough: the table is also pushed on join and after every rebuild, so a
+     * repeated request can only be a client asking for the same bytes again, and twenty of those a
+     * second made the server's upload a lever anyone could pull.
+     */
     public static void requestValueTable(C2SRequestValueTable msg, IPayloadContext context) {
         on(context, () -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
             if (!RateLimiter.allow(player)) return;
-            CasinoNetwork.sendValueTable(player, ValuationEngine.snapshot());
+            var snapshot = ValuationEngine.snapshot();
+            Long previous = VALUE_TABLE_SENT.put(player.getUUID(), snapshot.tableHash());
+            if (previous != null && previous == snapshot.tableHash()) return;
+            CasinoNetwork.sendValueTable(player, snapshot);
         }, "request_value_table");
     }
+
+    /** Which value table each player was last sent on request, by its hash. */
+    private static final java.util.Map<java.util.UUID, Long> VALUE_TABLE_SENT = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static void forget(ServerPlayer player) {
+        VALUE_TABLE_SENT.remove(player.getUUID());
+    }
+
 }

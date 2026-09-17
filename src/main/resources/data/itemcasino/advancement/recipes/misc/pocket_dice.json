@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "itemcasino:pocket_dice"
+      }
+    },
+    "has_predict_the_dice": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "itemcasino:predict_the_dice"
+          }
+        ]
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_predict_the_dice"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "itemcasino:pocket_dice"
+    ]
+  }
+}

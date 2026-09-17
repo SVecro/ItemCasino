@@ -8,7 +8,7 @@ fail=0
 echo "== compile"
 bash tools/offline/compile.sh > .offline/compile.log 2>&1 || fail=1
 grep -E "error|classes:" .offline/compile.log | tail -30
-echo "   $(grep -c 'warning: \[removal\]' .offline/compile.log) [removal] warnings (6 expected)"
+echo "   $(grep -c 'warning: \[removal\]' .offline/compile.log) [removal] warnings (0 expected)"
 
 echo "== junit"
 bash tools/offline/junit.sh > .offline/junit.log 2>&1 || fail=1

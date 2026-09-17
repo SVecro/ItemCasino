@@ -36,10 +36,16 @@ import java.util.List;
  * does not. Two items only share an entry when they are the same item <em>with the same
  * components</em>, so an enchanted pickaxe is never quietly merged with a plain one.
  *
- * <h2>The one thing it will not do</h2>
- * Past {@link #MAX_ENTRIES} distinct items it stops banking new ones rather than evicting old ones.
- * Evicting would mean deleting somebody's items to make room for somebody else's, and the honest
- * failure here is the old behaviour: the item is consumed, as it was before the pot existed.
+ * <h2>When it is full</h2>
+ * It holds at most {@link #MAX_ENTRIES} distinct items. Every damaged tool is a kind of its own, so a
+ * busy server reaches that quickly, and a full pot used to refuse every new kind for good: the losses
+ * vanished and the Vault turned offerings away. Now a new kind worth more than the cheapest entry in
+ * the pot takes that entry's place; the entry it replaces was already lost to the house, and the pot
+ * keeps the most valuable things it has been given. A new kind worth less is consumed.
+ *
+ * <h2>What it never banks</h2>
+ * Items whose worth is in their data components (potions, enchanted books, written books...). The
+ * engine prices them as the bare item, so a draw would hand their real worth over at that price.
  */
 public class Jackpot extends SavedData {
 
@@ -114,7 +120,10 @@ public class Jackpot extends SavedData {
 
     public boolean isEmpty() { return entries.isEmpty() && chips <= 0; }
 
-    /** Banks a loss. Returns what was actually taken in, which is nothing once the pot is full. */
+    /**
+     * Banks a loss. Returns what was actually taken in: nothing when the pot is full and every kind
+     * in it is worth more than this.
+     */
     public long deposit(ItemStack prototype, long count) {
         if (prototype.isEmpty() || count <= 0) return 0;
         for (int i = 0; i < entries.size(); i++) {
@@ -125,12 +134,40 @@ public class Jackpot extends SavedData {
                 return count;
             }
         }
-        if (entries.size() >= MAX_ENTRIES) return 0;
         ItemStack single = prototype.copy();
         single.setCount(1);
-        entries.add(new Hoard(single, count));
+        if (entries.size() >= MAX_ENTRIES) {
+            int evict = evictionFor(single, count, ValuationEngine.snapshot());
+            if (evict < 0) return 0;
+            entries.set(evict, new Hoard(single, count));
+        } else {
+            entries.add(new Hoard(single, count));
+        }
         setDirty();
         return count;
+    }
+
+    /**
+     * The entry a new kind worth {@code count} of {@code prototype} would replace in a full pot: the
+     * cheapest one, if the newcomer is worth more. -1 when it is not.
+     */
+    private int evictionFor(ItemStack prototype, long count, ValuationSnapshot snapshot) {
+        long incoming = entryValue(prototype, count, snapshot);
+        int cheapest = -1;
+        long cheapestValue = Long.MAX_VALUE;
+        for (int i = 0; i < entries.size(); i++) {
+            long value = entryValue(entries.get(i).prototype(), entries.get(i).count(), snapshot);
+            if (value < cheapestValue) {
+                cheapestValue = value;
+                cheapest = i;
+            }
+        }
+        return cheapest >= 0 && incoming > cheapestValue ? cheapest : -1;
+    }
+
+    private static long entryValue(ItemStack prototype, long count, ValuationSnapshot snapshot) {
+        long unit = StackValuator.unitValue(prototype, snapshot);
+        return unit == Fixed.INF || unit <= 0 ? 0L : saturatingMultiply(unit, count);
     }
 
     /** What the pot is worth, priced by the same engine that prices every wager. */
@@ -205,37 +242,25 @@ public class Jackpot extends SavedData {
         return total;
     }
 
-    /** Whether {@link #deposit} would take this item in, rather than refuse a new kind. */
-    public boolean canDeposit(ItemStack prototype) {
-        if (prototype.isEmpty()) return false;
+    /** Whether {@link #deposit} would take this stack (its whole count) in, rather than refuse a new kind. */
+    public boolean canDeposit(ItemStack stack) {
+        if (stack.isEmpty()) return false;
         if (entries.size() < MAX_ENTRIES) return true;
         for (Hoard entry : entries) {
-            if (ItemStack.isSameItemSameComponents(entry.prototype(), prototype)) return true;
+            if (ItemStack.isSameItemSameComponents(entry.prototype(), stack)) return true;
         }
-        return false;
-    }
-
-    /**
-     * Hands the entire pot to one player and empties it.
-     *
-     * <p>Delivered straight to their inventory, and whatever does not fit goes to their casino
-     * mailbox rather than onto the ground: a pot can be tens of thousands of items, and raining that
-     * many entities onto one spot is a lag spike, and a gift to whoever is standing nearby. Counts
-     * are walked directly rather than split into a list of stacks first, so no size of pot is ever
-     * truncated.
-     *
-     * @return what the pot was worth, for the record
-     */
-    public long award(ServerPlayer player) {
-        return award(player, 100);
+        return evictionFor(stack.copyWithCount(1), stack.getCount(), ValuationEngine.snapshot()) >= 0;
     }
 
     /**
      * Hands a {@code percent} share of the pot to one player: of every kind, that share of its count
-     * rounded down. The rest stays in the pot for the next winner.
+     * rounded down, into their inventory and whatever does not fit into their casino mailbox (a pot
+     * can be tens of thousands of items, and raining that many entities onto one spot is a lag spike
+     * and a gift to whoever stands nearby). The rest stays in the pot for the next winner.
      *
      * @return what the share was worth, for the record; zero when it rounds down to nothing
      */
+
     public long award(ServerPlayer player, int percent) {
         Award award = awardShare(player, percent);
         if (award.chipCents() > 0) {
@@ -311,7 +336,7 @@ public class Jackpot extends SavedData {
                 left -= chunk;
             }
         }
-        ItemCasino.LOGGER.info("[jackpot] {} took {}% of the pot: {} stacks across {} kinds and {} chip cents",
+        ItemCasino.AUDIT.info("[jackpot] {} took {}% of the pot: {} stacks across {} kinds and {} chip cents",
                 winner, share, stacks.size(), won.size(), chipCents);
         return new Prize(winner, share, value, chipCents, List.copyOf(stacks));
     }
@@ -339,25 +364,6 @@ public class Jackpot extends SavedData {
         server.getPlayerList().broadcastSystemMessage(message.copy().withStyle(ChatFormatting.YELLOW), false);
     }
 
-    /**
-     * The chance every wager carries, whether or not the player is thinking about the pot.
-     *
-     * <p>Small enough that it is never a reason to play, and only offered on a wager big enough to
-     * be a real risk — otherwise the cheapest possible bet, repeated, becomes a free lottery ticket
-     * dispenser, which is how a jackpot gets drained by a macro rather than won.
-     *
-     * @return true when the pot was just taken
-     */
-    public boolean rollAmbient(ServerPlayer player, long wagerValue) {
-        if (isEmpty()) return false;
-        if (wagerValue < CasinoConfig.SERVER.jackpotMinWagerValue.get()) return false;
-        int ppm = CasinoConfig.SERVER.jackpotAmbientPpm.get();
-        if (ppm <= 0) return false;
-        if (player.level().getRandom().nextInt(1_000_000) >= ppm) return false;
-        award(player);
-        return true;
-    }
-
     // ------------------------------------------------------------------ arithmetic
 
     private static long saturatingAdd(long a, long b) {
@@ -382,6 +388,8 @@ public class Jackpot extends SavedData {
     public static void bank(ServerLevel level, ItemStack prototype, long count) {
         if (count <= 0 || prototype.isEmpty()) return;
         if (!CasinoConfig.SERVER.jackpotEnabled.get()) return;
+        // See the class comment: hidden worth is never put up for a draw at the bare item's price.
+        if (com.itemcasino.valuation.ItemFilter.isComponentDriven(prototype)) return;
         of(level).deposit(prototype, count);
     }
 

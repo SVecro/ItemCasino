@@ -106,9 +106,15 @@ public final class Relaxer {
                 if (colour[cur] == 1) {                     // found a cycle: unwind to it
                     int from = depth - 1;
                     while (from >= 0 && stack[from] != cur) from--;
-                    if (from >= 0) cycles.add(Arrays.copyOfRange(stack, from, depth));
+                    // An item that is its own most expensive ingredient is a duplication recipe
+                    // (a smithing template: one template and seven diamonds make two). Its value
+                    // settles at the cost of the other ingredients, which is a price, not a
+                    // collapse; only one that fell all the way to the floor is worth a warning.
+                    boolean selfDuplication = from == depth - 1 && values[cur] > Fixed.MIN_POSITIVE;
+                    if (from >= 0 && !selfDuplication) cycles.add(Arrays.copyOfRange(stack, from, depth));
                     break;
                 }
+
                 if (colour[cur] == 2) break;
                 colour[cur] = 1;
                 if (depth == stack.length) stack = Arrays.copyOf(stack, depth * 2);

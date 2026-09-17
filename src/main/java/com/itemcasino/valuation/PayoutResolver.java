@@ -34,6 +34,10 @@ public final class PayoutResolver {
         if (wager.isEmpty() || num <= 0) return out;
 
         PayoutMath.Rounding rounding = rounding();
+        // Change is priced from the value table. A wager repaired while a world loads can settle
+        // before the first table exists, and change priced against no table is no change at all:
+        // round to the nearest whole item instead, which is fair on average.
+        if (rounding == PayoutMath.Rounding.CHANGE && !snapshot.isReady()) rounding = PayoutMath.Rounding.NEAREST;
         long[] split = PayoutMath.split(wager.getCount(), num, den);
         long whole = PayoutMath.applyRounding(split, rounding);
         addSplit(out, wager, whole);
@@ -129,18 +133,9 @@ public final class PayoutResolver {
         List<ItemStack> out = new ArrayList<>(2);
         if (residualValue <= 0) return out;
 
-        List<Item> denominations = new ArrayList<>(8);
-        for (int i = 0; i < snapshot.itemCount(); i++) {
-            Item item = snapshot.itemAt(i);
-            if (ItemFilter.isTagged(item, CasinoTags.CHANGE_CURRENCY)
-                    && snapshot.valueAt(i) != Fixed.INF && snapshot.valueAt(i) > 0) {
-                denominations.add(item);
-            }
-        }
-        denominations.sort(Comparator.comparingLong((Item i) -> snapshot.value(i)).reversed());
-
         long left = residualValue;
-        for (Item denomination : denominations) {
+        for (Item denomination : snapshot.changeDenominations()) {
+
             long unit = snapshot.value(denomination);
             if (unit <= 0 || unit == Fixed.INF || unit > left) continue;
             long count = left / unit;

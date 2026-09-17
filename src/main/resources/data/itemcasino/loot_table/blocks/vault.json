@@ -2,8 +2,15 @@
   "type": "minecraft:block",
   "random_sequence": "itemcasino:blocks/vault",
   "pools": [
-    { "rolls": 1.0, "bonus_rolls": 0.0,
-      "conditions": [ { "condition": "minecraft:survives_explosion" } ],
-      "entries": [ { "type": "minecraft:item", "name": "itemcasino:vault" } ] }
+    {
+      "rolls": 1.0,
+      "bonus_rolls": 0.0,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "itemcasino:vault"
+        }
+      ]
+    }
   ]
 }

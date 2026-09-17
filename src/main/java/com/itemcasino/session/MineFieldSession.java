@@ -236,7 +236,7 @@ public class MineFieldSession extends CasinoSession {
 
         host.broadcast(id -> new S2CSessionStarted(id, sessionId, gameType(), boardEdgePpm));
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[wager] {} mines session={} stake={}c mines={}",
+            ItemCasino.AUDIT.info("[wager] {} mines session={} stake={}c mines={}",
                     player.getName().getString(), sessionId, stakeCents, boardMines);
         }
         return true;
@@ -253,11 +253,6 @@ public class MineFieldSession extends CasinoSession {
         if (!MineField.isTile(tile) || (revealed >>> tile & 1) != 0) return false;
         // Only reachable with a stake the table would not take today, e.g. after a config change.
         if (overCeiling()) return false;
-
-        // The first tile is where the risk starts, so that is where the ambient jackpot chance is
-        // offered. On commit it would be a free ticket: commit, cash out at x1, repeat.
-        if (revealed == 0) onWagerCommitted(player);
-        if (state != GameState.ROLLING) return false;
 
         lastTile = tile;
         touch();
@@ -279,6 +274,13 @@ public class MineFieldSession extends CasinoSession {
         return true;
     }
 
+    @Override
+    public boolean commitWager(ServerPlayer player) { return placeWager(player); }
+
+    /** Nothing to acknowledge: the board has no animation, and every click is its own packet. */
+    @Override
+    public boolean acknowledge(long claimedSession) { return false; }
+
     public boolean cashOut(ServerPlayer player, int claimedToken) {
         if (state != GameState.ROLLING) return false;
         if (claimedToken != token(sessionId)) return false;
@@ -297,22 +299,11 @@ public class MineFieldSession extends CasinoSession {
     }
 
     private void settle() {
-        if (!setState(GameState.SETTLING)) return;
+        if (state != GameState.ROLLING) return;
         decidedWin = outcome == OUTCOME_CASHED && revealed != 0;
-        materialiseDecidedOutcome();
-        recordOutcome(stakedValue(), returnedValue());
-        bankLoss();
-        escrow = ItemStack.EMPTY;
-        deadlineTick = 0;
-        setState(payout.isEmpty() ? GameState.IDLE : GameState.PAYOUT_PENDING);
-        returnCardsToSlots();
-        touch();
-        if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[settle] mines session={} mines={} tiles={} outcome={} payout={}",
-                    sessionId, boardMines, revealedCount(),
-                    outcome == OUTCOME_BOOM ? "BOOM" : "cashed", payout);
-        }
-        broadcastPayout();
+        settleHouseWager(() -> ItemCasino.AUDIT.info(
+                "[settle] mines session={} mines={} tiles={} outcome={} payout={}",
+                sessionId, boardMines, revealedCount(), outcome == OUTCOME_BOOM ? "BOOM" : "cashed", payout));
     }
 
     /**

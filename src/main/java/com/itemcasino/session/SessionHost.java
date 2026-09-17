@@ -31,8 +31,11 @@ public interface SessionHost {
      */
     ServerLevel hostLevel();
 
+    /**
+     * Where outcomes come from. Never the level's own random source: see {@link CasinoRandom}.
+     */
     default RandomSource random() {
-        return hostLevel().getRandom();
+        return CasinoRandom.INSTANCE;
     }
 
     /** Marks the owner dirty so the session's state reaches disk. */

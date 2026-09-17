@@ -32,5 +32,22 @@ public final class CasinoTags {
     public static final TagKey<Item> REFUSED_IN_SLOT =
             TagKey.create(Registries.ITEM, ItemCasino.id("refused_in_slot"));
 
+    /**
+     * What the Cashier takes on deposit: by default the currencies it pays out and their blocks.
+     * Anything else is played at the tables, where the house keeps its edge; a cashier that took
+     * every item at its full value turned every farm into a diamond mine at 98 %.
+     */
+    public static final TagKey<Item> CASHIER_ACCEPTS =
+            TagKey.create(Registries.ITEM, ItemCasino.id("cashier_accepts"));
+
+    /**
+     * Items that are never offered as an Upgrader target, whatever their value. Empty in the mod; a
+     * server or a pack fills it (a dragon egg, a nether star...) when it wants some items to stay out
+     * of reach of the wheel.
+     */
+    public static final TagKey<Item> NOT_A_TARGET =
+            TagKey.create(Registries.ITEM, ItemCasino.id("not_a_target"));
+
     private CasinoTags() {}
+
 }

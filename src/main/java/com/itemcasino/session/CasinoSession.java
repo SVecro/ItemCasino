@@ -176,6 +176,35 @@ public abstract class CasinoSession {
         host.onViewerClosed(player);
     }
 
+    /**
+     * A player has just opened this session's screen, and their menu is live. Anything the screen
+     * needs that no data slot carries (a blackjack hand in progress) is sent from here: the client
+     * clears its state when a screen closes, so someone who closes and reopens mid-game would
+     * otherwise look at an empty table until the next packet.
+     */
+    public void onViewerOpened(ServerPlayer player) {}
+
+    /** Sends one packet to one viewer, addressed to the menu they have open. */
+    protected static void sendTo(ServerPlayer player,
+                                 java.util.function.IntFunction<net.minecraft.network.protocol.common.custom.CustomPacketPayload> factory) {
+        if (player.containerMenu == null) return;
+        com.itemcasino.network.CasinoNetwork.send(player, factory.apply(player.containerMenu.containerId));
+    }
+
+    // ------------------------------------------------------------------ the two commands every game answers
+
+    /**
+     * The seated player pressed the table's commit button: spin, roll, deal, ready, draw, start.
+     * Every game implements it, so the packet handler needs no list of games to forget one from.
+     */
+    public abstract boolean commitWager(ServerPlayer player);
+
+    /**
+     * The client has finished showing the animation of session {@code claimedSession}. Only ever brings
+     * a settle forward; the deadline settles without it.
+     */
+    public abstract boolean acknowledge(long claimedSession);
+
     public void touch() {
         lastTouchTick = host.hostLevel().getGameTime();
     }
@@ -505,10 +534,11 @@ public abstract class CasinoSession {
     /**
      * Escrows part of the slot and leaves the remainder where it was.
      *
-     * <p>Only the Vault needs this: every other game takes the whole wager or none of it, and
-     * giving them a partial path would be an invitation to leave a few items stranded in a slot the
-     * state machine believes is empty. Like {@link #escrowWager} it is synchronous and unconditional
-     * once started, so the two halves of the split never both exist.
+     * <p>For the tables that take only part of a stack: the Vault (the useful part of an offering)
+     * and the slot machine (up to its stake ceiling). The remainder stays in the slot, sealed like
+     * the slot itself until the wager settles, and goes back with the seat. Like
+     * {@link #escrowWager} it is synchronous and unconditional once started, so the two halves of the
+     * split never both exist.
      */
     protected ItemStack escrowPartial(int count) {
         ItemStack stack = wager.getItem(0);
@@ -644,7 +674,10 @@ public abstract class CasinoSession {
         return frozenPpm > 0 && frozenPpm <= 100_000 ? S2CPayoutReady.TIER_BIG : S2CPayoutReady.TIER_WIN;
     }
 
-    /** Everything this session is holding, handed to the player or the floor. Used at teardown. */
+    /**
+     * Everything this session is holding, handed to the player or, with nobody to name, the floor.
+     * Used at teardown.
+     */
     public void liquidate(@Nullable ServerPlayer to) {
         List<ItemStack> everything = new ArrayList<>(4);
         if (!wager.getItem(0).isEmpty()) everything.add(wager.removeItemNoUpdate(0));
@@ -652,20 +685,37 @@ public abstract class CasinoSession {
         everything.addAll(payout);
         payout.clear();
 
-        for (ItemStack stack : everything) {
-            ItemStack copy = stack.copy();
-            if (to != null) to.getInventory().add(copy);   // mutates copy to the leftover
-            if (!copy.isEmpty()) host.dropOverflow(copy);
-        }
+        giveTo(to, everything);
         state = GameState.IDLE;
         deadlineTick = 0;
         wagerOwner = null;
         host.markDirty();
     }
 
+    /**
+     * Hands stacks to a player through the casino mailbox: into their inventory when they can hold
+     * on to it, into the mailbox when they cannot, and never into the inventory of a player who is
+     * dead or already disconnected.
+     *
+     * <p>That last case is why this exists. A pocket game or Gil's table is torn down when its menu
+     * closes, and a menu closes when a dead player respawns (the old player entity is removed, its
+     * inventory already dropped and never copied to the new one) and when a player disconnects (after
+     * {@code PlayerList.remove} has saved them). Adding to the inventory there destroyed whatever was
+     * in the slot, which after a chip game is the whole Chip Card. With nobody to name, the floor.
+     */
+    protected void giveTo(@Nullable ServerPlayer to, List<ItemStack> stacks) {
+        if (stacks.isEmpty()) return;
+        net.minecraft.server.MinecraftServer server = to == null ? null : to.level().getServer();
+        if (server != null && com.itemcasino.player.CasinoMailbox.send(server, to.getUUID(), stacks)) return;
+        for (ItemStack stack : stacks) {
+            if (!stack.isEmpty()) host.dropOverflow(stack.copy());
+        }
+    }
+
     // ------------------------------------------------------------------ ticking
 
     public void tick() {
+        if (restoredBookkeeping != null) runRestoredBookkeeping();
         if (state == GameState.IDLE && escrow.isEmpty() && payout.isEmpty()) return;
         long now = host.hostLevel().getGameTime();
 
@@ -735,19 +785,44 @@ public abstract class CasinoSession {
     }
 
     /**
-     * The moment a wager is committed, and with it the one chance in fifty thousand.
+     * The end of a house wager, shared by the tables whose settle has no special shape (the
+     * Upgrader, the dice, the slot machine and the mine field). One sequence, so a table added later
+     * cannot forget to bank the loss or to hand the card back.
      *
-     * <p>Rolled here rather than per game so no table can be added later that quietly forgets to
-     * offer it. Duels do not call this: two players trading stakes never lose anything to the
-     * house, so a duel would be a free roll, and two accounts passing the same stack back and forth
-     * would be a jackpot farm.
+     * @param log writes the table's own settlement line; only called when settlements are logged
      */
-    protected void onWagerCommitted(ServerPlayer player) {
-        if (!CasinoConfig.SERVER.jackpotEnabled.get() || escrow.isEmpty()) return;
-        long value = stakeIsChips() ? Chips.valueOfCents(committedStakeCents())
-                : StackValuator.value(escrow, snapshot());
-        if (value == Fixed.INF || value <= 0) return;
-        Jackpot.of(host.hostLevel()).rollAmbient(player, value);
+    protected final void settleHouseWager(Runnable log) {
+        if (!setState(GameState.SETTLING)) return;
+        materialiseDecidedOutcome();
+        recordOutcome(stakedValue(), returnedValue());
+        bankLoss();
+        escrow = ItemStack.EMPTY;
+        deadlineTick = 0;
+        setState(payout.isEmpty() ? GameState.IDLE : GameState.PAYOUT_PENDING);
+        returnCardsToSlots();
+        rearmIfStakeLeft();
+        touch();
+        if (CasinoConfig.SERVER.logSettlements.get()) log.run();
+        broadcastPayout();
+    }
+
+    /**
+     * A table that took only part of a stack still has the rest in its slot once the wager settles,
+     * and nothing touched the slot to arm it again: without this the button stayed dead until the
+     * player moved the stack.
+     */
+    protected void rearmIfStakeLeft() {
+        if (state.acceptsItems() && !wager.getItem(0).isEmpty()) onWagerChanged();
+    }
+
+    /** How many items of the escrowed kind a wager staked. Blackjack adds a doubled bet. */
+    protected long stakedItemCount() {
+        return escrow.getCount();
+    }
+
+    /** Whether a settled loss at this table feeds the pot. Not for a duel, nor for the Vault's offering. */
+    protected boolean banksLosses() {
+        return true;
     }
 
     /** Resolves a session whose client never acknowledged. */
@@ -819,9 +894,73 @@ public abstract class CasinoSession {
         if (!state.holdsEscrow()) return;
         ItemCasino.LOGGER.info("Repairing casino session {} restored in state {}", sessionId, state);
         materialiseDecidedOutcome();
+        captureRestoredBookkeeping();
         escrow = ItemStack.EMPTY;
         deadlineTick = 0;
         state = SessionMachine.repairAfterLoad(state, !payout.isEmpty());
+    }
+
+    // ------------------------------------------------------------------ bookkeeping after a restore
+
+    /**
+     * What a session repaired on load still owes the pot and the stats.
+     *
+     * <p>A repair runs while the chunk is loading: the block entity has no level yet and the item
+     * values may not exist yet, so it can neither bank a loss nor price a stake. It writes down what
+     * it settled, and the first tick that has both finishes the job. Not persisted: if the chunk
+     * unloads again before it ever ticks, the loss simply is not banked, which is what happened to
+     * every restored loss before this existed.
+     */
+    @Nullable protected transient java.util.function.Consumer<ServerLevel> restoredBookkeeping;
+
+    /** The solo house games' version: one owner, one stake, a loss banked when the table banks losses. */
+    protected void captureRestoredBookkeeping() {
+        if (escrow.isEmpty()) return;
+        final UUID owner = wagerOwner;
+        final boolean chips = stakeCents > 0 && ChipCards.isCard(escrow);
+        final ItemStack prototype = escrow.copyWithCount(1);
+        final long count = stakedItemCount();
+        final long stakedCents = chips ? committedStakeCents() : 0L;
+        final long paidCents = chips ? chipPayoutCents : 0L;
+        final List<ItemStack> paid = new ArrayList<>();
+        for (ItemStack stack : payout) if (!ChipCards.isCard(stack)) paid.add(stack.copy());
+        final boolean bank = banksLosses();
+        restoredBookkeeping = level -> {
+            ValuationSnapshot values = ValuationEngine.snapshot();
+            long unit = StackValuator.unitValue(prototype, values);
+            long staked = chips ? Chips.valueOfCents(stakedCents)
+                    : unit == Fixed.INF ? 0L : Fixed.mul(unit, count);
+            long returned = Fixed.add(valueOf(paid), Chips.valueOfCents(paidCents));
+            if (owner != null) CasinoStats.recordWager(level.getServer(), owner, gameType(), staked, returned);
+            if (!bank) return;
+            if (chips) {
+                Jackpot.bankChips(level, stakedCents - paidCents);
+            } else {
+                long paidBack = 0;
+                for (ItemStack stack : paid) {
+                    if (ItemStack.isSameItemSameComponents(stack, prototype)) paidBack += stack.getCount();
+                }
+                Jackpot.bank(level, prototype, count - paidBack);
+            }
+        };
+    }
+
+    private void runRestoredBookkeeping() {
+        if (!ValuationEngine.snapshot().isReady()) return;
+        ServerLevel level;
+        try {
+            level = host.hostLevel();
+        } catch (RuntimeException e) {
+            return;
+        }
+        if (level == null) return;
+        java.util.function.Consumer<ServerLevel> pending = restoredBookkeeping;
+        restoredBookkeeping = null;
+        try {
+            pending.accept(level);
+        } catch (RuntimeException e) {
+            ItemCasino.LOGGER.error("Could not book a casino session restored from disk", e);
+        }
     }
 
     @Nullable

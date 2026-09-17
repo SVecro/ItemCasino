@@ -100,7 +100,30 @@ public final class ValuationSnapshot {
 
     public ValueGraph graph() { return graph; }
 
+    /** The change currencies, most valuable first; worked out once per table rather than per payout. */
+    @javax.annotation.Nullable private volatile List<Item> changeDenominations;
+
+    /**
+     * The items a sub-item remainder is paid in: the {@code itemcasino:change_currency} tag, priced,
+     * most valuable first. Tags only change on a reload, and a reload builds a new snapshot.
+     */
+    public List<Item> changeDenominations() {
+        List<Item> cached = changeDenominations;
+        if (cached != null) return cached;
+        List<Item> found = new ArrayList<>(8);
+        for (int i = 0; i < items.length; i++) {
+            if (values[i] != Fixed.INF && values[i] > 0
+                    && ItemFilter.isTagged(items[i], com.itemcasino.registry.CasinoTags.CHANGE_CURRENCY)) {
+                found.add(items[i]);
+            }
+        }
+        found.sort(java.util.Comparator.comparingLong((Item item) -> value(item)).reversed());
+        changeDenominations = List.copyOf(found);
+        return changeDenominations;
+    }
+
     /** Every item that may be offered as a target, for the advisory client table. */
+
     public List<Item> targetableItems() {
         List<Item> out = new ArrayList<>(items.length / 2);
         for (int i = 0; i < items.length; i++) {

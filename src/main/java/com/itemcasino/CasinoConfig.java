@@ -14,6 +14,10 @@ import java.util.List;
  */
 public final class CasinoConfig {
 
+    /** The names {@code safety.disabled_games} accepts, one per game type (by its byte id) plus the cashier. */
+    public static final List<String> GAME_IDS = List.of(
+            "upgrader", "dice", "blackjack", "coin_flip", "slot_machine", "vault", "mine_field", "cashier");
+
     public static final Server SERVER;
     public static final ModConfigSpec SERVER_SPEC;
     public static final Common COMMON;
@@ -30,6 +34,18 @@ public final class CasinoConfig {
     }
 
     private CasinoConfig() {}
+
+    /**
+     * Whether the server switched this game off. {@code gameType} is the byte every session reports
+     * ({@code S2CSessionStarted.GAME_*}), which is also its index in {@link #GAME_IDS}.
+     */
+    public static boolean isGameDisabled(int gameType) {
+        return gameType >= 0 && gameType < GAME_IDS.size() && isDisabled(GAME_IDS.get(gameType));
+    }
+
+    public static boolean isDisabled(String id) {
+        return SERVER.disabledGames.get().contains(id);
+    }
 
     public static final class Server {
 
@@ -54,7 +70,6 @@ public final class CasinoConfig {
 
         // --- upgrader -----------------------------------------------------
         public final ModConfigSpec.IntValue wheelSpinTicks;
-        public final ModConfigSpec.IntValue upgraderOutputCount;
 
         // --- predict the dice ---------------------------------------------
         public final ModConfigSpec.IntValue cashierFeePpm;
@@ -71,8 +86,7 @@ public final class CasinoConfig {
 
         // --- the jackpot ----------------------------------------------------
         public final ModConfigSpec.BooleanValue jackpotEnabled;
-        public final ModConfigSpec.IntValue jackpotAmbientPpm;
-        public final ModConfigSpec.IntValue jackpotMinWagerValue;
+
         public final ModConfigSpec.IntValue jackpotDrawReturnPpm;
         public final ModConfigSpec.IntValue jackpotDrawMaxPpm;
         public final ModConfigSpec.IntValue jackpotDrawMinValue;
@@ -109,6 +123,7 @@ public final class CasinoConfig {
         public final ModConfigSpec.IntValue abandonSeconds;
         public final ModConfigSpec.BooleanValue protectBlockDuringWager;
         public final ModConfigSpec.BooleanValue logSettlements;
+        public final ModConfigSpec.ConfigValue<List<? extends String>> disabledGames;
 
         private Server(ModConfigSpec.Builder b) {
             b.comment("Item valuation").push("valuation");
@@ -150,7 +165,7 @@ public final class CasinoConfig {
                             o -> o instanceof String s && s.contains("="));
             maxIngredientOptions = b
                     .comment("Cap on how many alternatives of one tag ingredient are considered.")
-                    .defineInRange("max_ingredient_options", 64, 1, 4096);
+                    .defineInRange("max_ingredient_options", 1024, 1, 4096);
             b.pop();
 
             b.comment("Wagering rules").push("wagering");
@@ -170,7 +185,6 @@ public final class CasinoConfig {
 
             b.comment("Upgrader wheel").push("upgrader");
             wheelSpinTicks = b.defineInRange("spin_ticks", 150, 10, 600);
-            upgraderOutputCount = b.defineInRange("output_count", 1, 1, 64);
             b.pop();
 
             b.comment("Predict the Dice").push("dice");
@@ -221,14 +235,7 @@ public final class CasinoConfig {
                     .comment("Bank what players lose into one server-wide pot.",
                             "Turn this off and losses simply cease to exist, as they used to.")
                     .define("enabled", true);
-            jackpotAmbientPpm = b
-                    .comment("Chance, per wager at any house table, of taking the whole pot.",
-                            "20 = one in fifty thousand. This is meant to be a rumour, not a plan.")
-                    .defineInRange("ambient_ppm", 20, 0, 10_000);
-            jackpotMinWagerValue = b
-                    .comment("Wagers worth less than this do not get the ambient chance,",
-                            "so the smallest legal bet cannot be farmed for lottery tickets.")
-                    .defineInRange("ambient_min_wager_value", 50, 0, 100_000_000);
+
             jackpotDrawReturnPpm = b
                     .comment("What a bought draw at the Vault returns, in expectation,",
                             "as a fraction of what was fed into it. 800000 = 80%.")
@@ -241,7 +248,7 @@ public final class CasinoConfig {
                             "large offering can be likely; this is how likely it is allowed to get.")
                     .defineInRange("draw_max_chance_ppm", 500_000, 1, 900_000);
             jackpotDrawMinValue = b
-                    .comment("Smallest offering the Vault will accept.")
+                    .comment("Smallest offering the Vault will accept, in value points (1 chip = 1 point).")
                     .defineInRange("draw_min_value", 10, 1, 100_000_000);
             jackpotDrawPotSharePpm = b
                     .comment("How much of a Vault offering goes into the pot; the rest is gone for good.",
@@ -320,13 +327,21 @@ public final class CasinoConfig {
                     .comment("Abort and refund a session whose owner has not touched it for this long.")
                     .defineInRange("abandon_seconds", 300, 30, 7200);
             protectBlockDuringWager = b
-                    .comment("Cancel attempts to break a table while a wager is in flight.",
-                             "When false, the escrow and any pending payout drop instead.")
+                    .comment("Cancel attempts by a player to break a table while a wager is in flight.",
+                             "When false the table can be broken: a decided wager is settled first and every",
+                             "item goes back to its owner, as it does for explosions and other removals.")
                     .define("protect_block_during_wager", true);
             logSettlements = b
                     .comment("Log every settlement at INFO. Keep this on: it is the only answer to",
                              "'the casino robbed me', and it is how you find the dupe you missed.")
                     .define("log_settlements", true);
+            disabledGames = b
+                    .comment("Games switched off on this server. Their tables still open, so nobody loses",
+                             "what is in a slot, but refuse new wagers. Any of: upgrader, dice, blackjack,",
+                             "coin_flip, slot_machine, vault, mine_field, cashier.")
+                    .defineListAllowEmpty("disabled_games", List.of(), () -> "slot_machine",
+                            o -> o instanceof String s && GAME_IDS.contains(s));
+
             b.pop();
         }
     }

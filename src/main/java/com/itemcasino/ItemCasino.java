@@ -27,6 +27,12 @@ public final class ItemCasino {
 
     public static final String MOD_ID = "itemcasino";
     public static final Logger LOGGER = LoggerFactory.getLogger("ItemCasino");
+    /**
+     * Every wager, settlement, cashier exchange, jackpot and mailbox entry, when
+     * {@code safety.log_settlements} is on. A logger of its own so a server can route these lines to a
+     * separate file, or quieten them, in its logging configuration without losing the mod's warnings.
+     */
+    public static final Logger AUDIT = LoggerFactory.getLogger("ItemCasino/Audit");
 
     /**
      * A mob with no attribute map cannot be constructed at all, and the failure arrives as a null

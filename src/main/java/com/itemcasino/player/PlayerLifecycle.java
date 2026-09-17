@@ -21,4 +21,13 @@ public final class PlayerLifecycle {
     public static void onRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) CasinoMailbox.deliverAndNotify(player);
     }
+
+    /** The per-player network bookkeeping would otherwise grow by one entry per player ever seen. */
+    @SubscribeEvent
+    public static void onLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        com.itemcasino.network.RateLimiter.forget(player);
+        com.itemcasino.network.handler.ServerHandlers.forget(player);
+    }
+
 }

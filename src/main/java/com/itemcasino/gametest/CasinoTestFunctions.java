@@ -110,5 +110,26 @@ public final class CasinoTestFunctions {
             MINE_FIELD_STOPS_AT_THE_CEILING = REGISTER.register("mine_field_stops_at_the_ceiling",
                     () -> CasinoGameTests::mineFieldStopsAtTheCeiling);
 
+    public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
+            LIQUIDATE_KEEPS_WHAT_A_PLAYER_CANNOT_HOLD = REGISTER.register("liquidate_keeps_what_a_player_cannot_hold",
+                    () -> CasinoGameTests::liquidateKeepsWhatAPlayerCannotHold);
+
+    public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
+            RESTORED_DUEL_PAYS_ONCE = REGISTER.register("restored_duel_pays_once",
+                    () -> CasinoGameTests::restoredDuelPaysOnce);
+
+    public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
+            GIL_TAKES_ONLY_HIS_FEE = REGISTER.register("gil_takes_only_his_fee",
+                    () -> CasinoGameTests::gilTakesOnlyHisFee);
+
+    public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
+            FULL_POT_MAKES_ROOM = REGISTER.register("full_pot_makes_room",
+                    () -> CasinoGameTests::fullPotMakesRoom);
+
+    public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
+            SLOT_MACHINE_TAKES_ITS_CEILING = REGISTER.register("slot_machine_takes_its_ceiling",
+                    () -> CasinoGameTests::slotMachineTakesItsCeiling);
+
     private CasinoTestFunctions() {}
+
 }

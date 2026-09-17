@@ -93,7 +93,6 @@ public class BlackjackSession extends CasinoSession {
         setState(wagerStack().isEmpty() ? GameState.IDLE : GameState.ARMED);
     }
 
-
     /**
      * How many units of the original wager are riding on this hand: one normally, two after a
      * double. The screen multiplies the sealed slot's ghost by it, because a doubled bet that still
@@ -128,7 +127,6 @@ public class BlackjackSession extends CasinoSession {
         if (!setState(GameState.LOCKED)) return false;
         beginCommit(player, 0L);
         touch();
-        onWagerCommitted(player);
         host.broadcast(id -> new S2CSessionStarted(id, sessionId, gameType(), 0));
         return deal(player);
     }
@@ -152,7 +150,7 @@ public class BlackjackSession extends CasinoSession {
         resetActionDeadline();
 
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[wager] {} blackjack session={} wager={}x{} chips={}c",
+            ItemCasino.AUDIT.info("[wager] {} blackjack session={} wager={}x{} chips={}c",
                     player.getName().getString(), sessionId, escrow.getCount(),
                     BuiltInRegistries.ITEM.getKey(escrow.getItem()), stakeCents);
         }
@@ -208,21 +206,57 @@ public class BlackjackSession extends CasinoSession {
             return;
         }
         revealing = true;
-        Settlement settlement = table.settlement();
-        List<Card> dealerFinal = List.copyOf(table.dealer().cards());
-        List<Card> playerFinal = List.copyOf(table.player().cards());
         int ticks = com.itemcasino.core.game.blackjack.DealClock.revealTicks(
-                shownPlayerCards, shownDealerCards, playerFinal.size(), dealerFinal.size());
+                shownPlayerCards, shownDealerCards, table.player().cards().size(), table.dealer().cards().size());
         deadlineTick = host.hostLevel().getGameTime() + ticks + 40L;
         armAcknowledgement(ticks);
         host.markDirty();
 
+        host.broadcast(settledFactory());
+    }
+
+    /** The settled hand, for every viewer or for one who arrives during the reveal. */
+    private java.util.function.IntFunction<net.minecraft.network.protocol.common.custom.CustomPacketPayload> settledFactory() {
+        BlackjackTable t = table;
+        Settlement settlement = t.settlement();
+        List<Card> dealerFinal = List.copyOf(t.dealer().cards());
+        List<Card> playerFinal = List.copyOf(t.player().cards());
         byte outcome = settlement == null ? (byte) Outcome.PUSH.ordinal() : (byte) settlement.outcome().ordinal();
         int units = settlement == null ? 1 : settlement.betUnits();
-        int playerTotal = settlement == null ? table.player().total() : settlement.playerTotal();
-        int dealerTotal = settlement == null ? table.dealer().total() : settlement.dealerTotal();
-        host.broadcast(id -> new S2CBlackjackSettled(id, sessionId, outcome, units, dealerFinal, playerFinal,
-                playerTotal, dealerTotal));
+        int playerTotal = settlement == null ? t.player().total() : settlement.playerTotal();
+        int dealerTotal = settlement == null ? t.dealer().total() : settlement.dealerTotal();
+        long id = sessionId;
+        return container -> new S2CBlackjackSettled(container, id, outcome, units, dealerFinal, playerFinal,
+                playerTotal, dealerTotal);
+    }
+
+    @Override
+    public boolean commitWager(ServerPlayer player) { return placeWager(player); }
+
+    @Override
+    public boolean acknowledge(long claimedSession) { return finishReveal(claimedSession); }
+
+    /** A doubled item bet stakes the escrow and the collateral, both of the same kind. */
+    @Override
+    protected long stakedItemCount() {
+        return (long) escrow.getCount() + doubleEscrow.getCount();
+    }
+
+    /**
+     * Someone opened the table while a hand is in play: typically its own player, back after closing
+     * the screen. Their client dropped the hand when the screen closed, so it is sent again, with
+     * the session id their buttons must quote; during the reveal, the whole settled hand.
+     */
+    @Override
+    public void onViewerOpened(ServerPlayer player) {
+        if (state != GameState.ROLLING || table == null) return;
+        sendTo(player, id -> new S2CSessionStarted(id, sessionId, gameType(), 0));
+        if (revealing && table.phase() == BlackjackPhase.SETTLED) {
+            sendTo(player, settledFactory());
+        } else {
+            sendTo(player, stateFactory());
+        }
+
     }
 
     /** The client has laid down the last card of a settled hand. */
@@ -279,7 +313,7 @@ public class BlackjackSession extends CasinoSession {
         touch();
 
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[settle] blackjack session={} outcome={} units={} payout={}",
+            ItemCasino.AUDIT.info("[settle] blackjack session={} outcome={} units={} payout={}",
                     sessionId, settlement == null ? "VOID" : settlement.outcome(),
                     settlement == null ? 0 : settlement.betUnits(), payout);
         }
@@ -369,6 +403,13 @@ public class BlackjackSession extends CasinoSession {
 
     public void broadcastState() {
         if (table == null) return;
+        shownPlayerCards = table.player().cards().size();
+        shownDealerCards = table.dealerVisible().cards().size() + (table.holeHidden() ? 1 : 0);
+        host.broadcast(stateFactory());
+    }
+
+    /** The hand as it stands, as every viewer is shown it. */
+    private java.util.function.IntFunction<net.minecraft.network.protocol.common.custom.CustomPacketPayload> stateFactory() {
         BlackjackTable t = table;
         int remaining = (int) Math.max(0, deadlineTick - host.hostLevel().getGameTime());
         List<Card> playerHand = List.copyOf(t.player().cards());
@@ -377,13 +418,11 @@ public class BlackjackSession extends CasinoSession {
         int playerTotal = t.player().total();
         int dealerTotal = t.holeHidden() ? t.dealerVisible().total() : t.dealer().total();
         boolean hidden = t.holeHidden();
-        shownPlayerCards = playerHand.size();
-        shownDealerCards = dealerVisible.size() + (hidden ? 1 : 0);
-        // The mask is per-viewer: only the seated player can act, and only they can afford a double.
-        ServerPlayer seated = host.seatedPlayer();
-        int mask = legalMaskFor(seated);
-        host.broadcast(id -> new S2CBlackjackState(id, sessionId, phase, playerHand, dealerVisible,
-                hidden, mask, playerTotal, dealerTotal, remaining));
+        // The mask is the seated player's: only they can act, and only they can afford a double.
+        int mask = legalMaskFor(host.seatedPlayer());
+        long id = sessionId;
+        return container -> new S2CBlackjackState(container, id, phase, playerHand, dealerVisible,
+                hidden, mask, playerTotal, dealerTotal, remaining);
     }
 
     // ------------------------------------------------------------------ double-down collateral
@@ -405,7 +444,9 @@ public class BlackjackSession extends CasinoSession {
 
         Inventory inventory = player.getInventory();
         int remaining = needed;
-        for (int slot = 0; slot < inventory.getContainerSize() && remaining > 0; slot++) {
+        // The 36 carried slots only. getContainerSize() also counts the armour, the offhand, the body
+        // armour and the saddle, so doubling a bet on a chestplate used to take the one being worn.
+        for (int slot = 0; slot < Inventory.INVENTORY_SIZE && remaining > 0; slot++) {
             ItemStack stack = inventory.getItem(slot);
             if (!ItemStack.isSameItemSameComponents(stack, escrow)) continue;
             int take = Math.min(remaining, stack.getCount());
@@ -417,7 +458,7 @@ public class BlackjackSession extends CasinoSession {
             ItemCasino.LOGGER.error("Double-down collateral came up {} short; refunding", remaining);
             ItemStack refund = escrow.copy();
             refund.setCount(needed - remaining);
-            if (!player.getInventory().add(refund) && !refund.isEmpty()) host.dropOverflow(refund);
+            giveTo(player, List.of(refund));
             return false;
         }
         ItemStack taken = escrow.copy();
@@ -436,7 +477,7 @@ public class BlackjackSession extends CasinoSession {
         if (doubleEscrow.isEmpty()) return;
         ItemStack back = doubleEscrow.copy();
         doubleEscrow = ItemStack.EMPTY;
-        if (!player.getInventory().add(back) && !back.isEmpty()) payout.add(back);
+        giveTo(player, List.of(back));
         host.markDirty();
     }
 
@@ -444,7 +485,7 @@ public class BlackjackSession extends CasinoSession {
         if (prototype.isEmpty()) return 0;
         Inventory inventory = player.getInventory();
         int total = 0;
-        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+        for (int slot = 0; slot < Inventory.INVENTORY_SIZE; slot++) {
             if (ItemStack.isSameItemSameComponents(inventory.getItem(slot), prototype)) {
                 total += inventory.getItem(slot).getCount();
             }
@@ -471,10 +512,9 @@ public class BlackjackSession extends CasinoSession {
         if (!doubleEscrow.isEmpty()) {
             ItemStack back = doubleEscrow.copy();
             doubleEscrow = ItemStack.EMPTY;
-            if (to == null || !to.getInventory().add(back)) {
-                if (!back.isEmpty()) host.dropOverflow(back);
-            }
+            giveTo(to, List.of(back));
         }
+
         doubledChips = false;
         table = null;
         clearHandRecord();

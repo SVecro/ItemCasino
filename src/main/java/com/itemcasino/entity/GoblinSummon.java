@@ -51,6 +51,12 @@ public final class GoblinSummon {
                 player.getBoundingBox().inflate(24.0D)).isEmpty()) {
             return;
         }
+        // Gold thrown near piglins is a trade, not a summons: bartering is the one thing players
+        // routinely throw stacks of gold ingots for.
+        if (!level.getEntitiesOfClass(net.minecraft.world.entity.monster.piglin.AbstractPiglin.class,
+                item.getBoundingBox().inflate(PIGLIN_RANGE)).isEmpty()) {
+            return;
+        }
 
         GamblerGoblin goblin = CasinoEntities.GOBLIN.get().create(level,
                 net.minecraft.world.entity.EntitySpawnReason.EVENT);
@@ -61,8 +67,16 @@ public final class GoblinSummon {
                 level.getRandom().nextFloat() * 360F, 0F);
         goblin.setCustomName(Component.translatable("entity.itemcasino.gambler_goblin"));
 
-        // Cancelled: the tossed stack never enters the world. That is his fee.
-        event.setCanceled(true);
+        // His fee, and only his fee: one block, or the configured number of ingots. The rest of the
+        // stack lands on the ground as thrown. Cancelling the event destroys the whole stack, which
+        // is how a Ctrl+Q on sixty-four ingots used to cost sixty-four.
+        ItemStack thrown = item.getItem();
+        int fee = feeFor(thrown);
+        if (thrown.getCount() <= fee) {
+            event.setCanceled(true);
+        } else {
+            item.setItem(thrown.copyWithCount(thrown.getCount() - fee));
+        }
         level.addFreshEntity(goblin);
 
         level.sendParticles(ParticleTypes.HAPPY_VILLAGER, item.getX(), item.getY() + 0.5,
@@ -72,8 +86,16 @@ public final class GoblinSummon {
         player.displayClientMessage(Component.translatable("itemcasino.goblin.arrives"), false);
     }
 
+    private static final double PIGLIN_RANGE = 16.0D;
+
+    /** How many of this thrown stack he keeps. */
+    private static int feeFor(ItemStack stack) {
+        return stack.is(Items.GOLD_BLOCK) ? 1 : CasinoConfig.SERVER.goblinIngotCost.get();
+    }
+
     /** A gold block, or a handful of ingots. Enough that nobody summons him by fumbling one nugget. */
-    private static boolean isOffering(ItemStack stack) {
+    public static boolean isOffering(ItemStack stack) {
+
         if (stack.is(Items.GOLD_BLOCK)) return true;
         return stack.is(Items.GOLD_INGOT)
                 && stack.getCount() >= CasinoConfig.SERVER.goblinIngotCost.get();

@@ -260,8 +260,16 @@ public class CoinFlipSession extends CasinoSession {
         escrowBoth();
         if (!setState(GameState.LOCKED)) return false;
 
+        // The coin is weighted by the stakes, so each player expects back exactly what they put up
+        // however far apart the tolerance lets the two stakes be. An even coin gave the smaller
+        // stake up to 5.6 % more than it staked.
+        boolean chips = stakeCents > 0 && stakeCentsB > 0;
+        long valueA = chips ? Chips.valueOfCents(stakeCents) : valueOf(escrow);
+        long valueB = chips ? Chips.valueOfCents(stakeCentsB) : valueOf(escrowB);
+        int chanceA = com.itemcasino.core.game.DuelOdds.seatAChancePpm(valueA, valueB);
         RandomSource rng = host.random();
-        this.winnerSeat = rng.nextInt(SEATS);
+        this.winnerSeat = com.itemcasino.core.game.DuelOdds.winner(
+                rng.nextInt(com.itemcasino.core.game.DuelOdds.PPM), chanceA);
         this.decidedWin = winnerSeat == 0;
         this.stakeOwners[0] = host.seatId(0);
         this.stakeOwners[1] = host.seatId(1);
@@ -269,7 +277,7 @@ public class CoinFlipSession extends CasinoSession {
         // closed the screen is still the owner of their chair, and used to lose the pot for it.
         this.winnerId = stakeOwners[winnerSeat];
         this.wagerOwner = null;
-        this.frozenPpm = 500_000;                       // an even coin, and it says so on screen
+        this.frozenPpm = chanceA;                       // seat A's chance; seat B's is the rest
         this.spinTicks = CasinoConfig.SERVER.coinFlipTicks.get();
         setState(GameState.ROLLING);
         this.deadlineTick = host.hostLevel().getGameTime() + spinTicks + 40L;
@@ -282,8 +290,8 @@ public class CoinFlipSession extends CasinoSession {
                 spinTicks));
 
         if (CasinoConfig.SERVER.logSettlements.get()) {
-            ItemCasino.LOGGER.info("[wager] coin_flip session={} a={} b={} winner=seat{}",
-                    sessionId, escrow, escrowB, winnerSeat);
+            ItemCasino.AUDIT.info("[wager] coin_flip session={} a={} b={} chanceA={}ppm winner=seat{}",
+                    sessionId, escrow, escrowB, chanceA, winnerSeat);
         }
         return true;
     }
@@ -319,7 +327,57 @@ public class CoinFlipSession extends CasinoSession {
         return com.itemcasino.network.s2c.S2CPayoutReady.TIER_WIN;
     }
 
+    @Override
+    public boolean commitWager(ServerPlayer player) { return placeWager(player); }
+
+    @Override
+    public boolean acknowledge(long claimedSession) { return finishFlip(claimedSession); }
+
+    /** A duel feeds nothing to the pot: two players trade stakes and the house loses nothing. */
+    @Override
+    protected boolean banksLosses() { return false; }
+
+    /**
+     * A duel saved mid-flip. The base repair pays the pot out of both escrows but only empties seat
+     * A's: left set, seat B's stake was handed back a second time when the table was later broken,
+     * the same collateral bug the blackjack table once had with its double. And the stats, which the
+     * base class books for one owner, are booked for both chairs.
+     */
+    @Override
+    protected void repairAfterLoad() {
+        boolean holding = state.holdsEscrow();
+        java.util.function.Consumer<net.minecraft.server.level.ServerLevel> duelBooking =
+                holding ? captureDuelBookkeeping() : null;
+        super.repairAfterLoad();
+        if (!state.holdsEscrow()) {
+            escrowB = ItemStack.EMPTY;
+            stakeCentsB = 0;
+            ready[0] = false;
+            ready[1] = false;
+        }
+        if (duelBooking != null) restoredBookkeeping = duelBooking;
+    }
+
+    private java.util.function.Consumer<net.minecraft.server.level.ServerLevel> captureDuelBookkeeping() {
+        final boolean chips = stakeCents > 0 && stakeCentsB > 0;
+        final long centsA = stakeCents;
+        final long centsB = stakeCentsB;
+        final ItemStack stakeA = escrow.copy();
+        final ItemStack stakeB = escrowB.copy();
+        final UUID ownerA = stakeOwners[0];
+        final UUID ownerB = stakeOwners[1];
+        final int winner = winnerSeat;
+        return level -> {
+            long a = chips ? Chips.valueOfCents(centsA) : valueOf(stakeA);
+            long b = chips ? Chips.valueOfCents(centsB) : valueOf(stakeB);
+            long pot = Fixed.add(a, b);
+            recordOutcome(ownerA, a, winner == 0 ? pot : 0L);
+            recordOutcome(ownerB, b, winner == 1 ? pot : 0L);
+        };
+    }
+
     public boolean finishFlip(long claimedSession) {
+
         if (state != GameState.ROLLING) return false;
         if (claimedSession != 0 && claimedSession != sessionId) return false;
         settle();

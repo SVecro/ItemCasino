@@ -79,8 +79,18 @@ public final class CasinoGameTests {
         check(violation == null, where + ": " + violation);
     }
 
+    /**
+     * A mock server player. {@code makeMockServerPlayerInLevel} is deprecated for removal and 1.21.11
+     * offers no replacement that returns a {@code ServerPlayer} (only {@code makeMockPlayer}, a plain
+     * {@code Player}); the suppression is confined to this one call.
+     */
+    @SuppressWarnings("removal")
+    private static ServerPlayer mockPlayer(GameTestHelper helper) {
+        return helper.makeMockServerPlayerInLevel();
+    }
+
     private static ServerPlayer seat(GameTestHelper helper, AbstractCasinoBlockEntity table) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = mockPlayer(helper);
         // The mock player is hard-coded to creative, and a creative wager is refused by default --
         // an item conjured from nothing is not a wager. These tests are about escrow accounting
         // rather than about that guard, so the flag comes off before they start.
@@ -182,7 +192,7 @@ public final class CasinoGameTests {
     public static void spectatorsCannotAct(GameTestHelper helper) {
         AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.DICE.get());
         ServerPlayer seated = seat(helper, table);
-        ServerPlayer onlooker = helper.makeMockServerPlayerInLevel();
+        ServerPlayer onlooker = mockPlayer(helper);
         onlooker.getAbilities().instabuild = false;
         table.openFor(onlooker);
 
@@ -757,13 +767,22 @@ public final class CasinoGameTests {
      * and merges a second card into the first.
      */
     public static void cashierExchangesAtValue(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = mockPlayer(helper);
         player.getAbilities().instabuild = false;
         player.getInventory().clearContent();
         CashierMenu menu = new CashierMenu(0, player.getInventory(),
                 net.minecraft.world.inventory.ContainerLevelAccess.NULL, CashierMenu.Rates.current());
         var snapshot = com.itemcasino.valuation.ValuationEngine.snapshot();
         long diamond = com.itemcasino.valuation.StackValuator.unitValue(new ItemStack(Items.DIAMOND), snapshot);
+
+        // Only currencies are exchanged: a stack of cobblestone stays where it is and credits nothing.
+        menu.slots.get(CashierMenu.DEPOSIT_SLOT).set(new ItemStack(Items.COBBLESTONE, 64));
+        menu.deposit(player);
+        check(!ChipCards.isCard(menu.card()), "cobblestone was exchanged for a card");
+        check(menu.depositStack().getCount() == 64, "refused cobblestone left the slot");
+        check(!menu.slots.get(CashierMenu.DEPOSIT_SLOT).mayPlace(new ItemStack(Items.COBBLESTONE)),
+                "the deposit slot accepts cobblestone");
+        menu.slots.get(CashierMenu.DEPOSIT_SLOT).set(ItemStack.EMPTY);
 
         menu.slots.get(CashierMenu.DEPOSIT_SLOT).set(new ItemStack(Items.DIAMOND, 3));
         menu.deposit(player);
@@ -836,10 +855,12 @@ public final class CasinoGameTests {
         jackpot.depositChips(1_000_000);
 
         session.wagerContainer().setItem(0, ChipCards.newCard(100_000));
-        session.setBet(player, 5);
+        // At least the Vault's smallest offering (draw_min_value, 10 points), now that the setting is
+        // compared in points: five chips used to pass only because it was compared in micro-points.
+        session.setBet(player, 20);
         long chipsBefore = jackpot.chips();
         commit(session, player, session.placeWager(player));
-        long offered = 500;
+        long offered = 2_000;
         long banked = com.itemcasino.core.game.VaultOdds.potPart(offered,
                 com.itemcasino.CasinoConfig.SERVER.jackpotDrawPotSharePpm.get());
         // Only part of the offering is banked; a winning draw takes its share straight back out.
@@ -853,10 +874,173 @@ public final class CasinoGameTests {
         helper.succeed();
     }
 
+    // ------------------------------------------------------------------ regressions from the 2026-09-17 audit
+
+    /**
+     * A session torn down onto a player who cannot keep items (dead, or already disconnected) sends
+     * them to the mailbox. Pocket games and Gil tear down when their menu closes, and a menu closes
+     * when a dead player respawns and after a disconnecting player has been saved: adding to the
+     * inventory then destroyed whatever was in the slot, a Chip Card included.
+     */
+    public static void liquidateKeepsWhatAPlayerCannotHold(GameTestHelper helper) {
+        var mailbox = CasinoMailbox.of(helper.getLevel().getServer());
+
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.DICE.get());
+        ServerPlayer dead = seat(helper, table);
+        dead.getInventory().clearContent();
+        long mailedBefore = mailbox.pendingCount(dead.getUUID(), CasinoItems.CHIP_CARD.get());
+        table.session().wagerContainer().setItem(0, ChipCards.newCard(12_300));
+        dead.setHealth(0.0F);
+        table.session().liquidate(dead);
+        check(countIn(dead, CasinoItems.CHIP_CARD.get()) == 0, "a dead player's inventory was handed the card");
+        check(mailbox.pendingCount(dead.getUUID(), CasinoItems.CHIP_CARD.get()) == mailedBefore + 1,
+                "the dead player's card did not reach the mailbox");
+        check(table.session().wagerStack().isEmpty(), "the card is still in the slot");
+        dead.setHealth(dead.getMaxHealth());   // before the level ticks it through a death
+
+        ServerPlayer gone = mockPlayer(helper);
+        gone.getAbilities().instabuild = false;
+        gone.getInventory().clearContent();
+        long goneBefore = mailbox.pendingCount(gone.getUUID(), Items.DIAMOND);
+        table.session().wagerContainer().setItem(0, new ItemStack(Items.DIAMOND, 5));
+        gone.disconnect();
+        table.session().liquidate(gone);
+        check(countIn(gone, Items.DIAMOND) == 0, "a disconnected player's saved inventory was handed the stake");
+        check(mailbox.pendingCount(gone.getUUID(), Items.DIAMOND) == goneBefore + 5,
+                "the disconnected player's stake did not reach the mailbox");
+
+        ServerPlayer alive = mockPlayer(helper);
+        alive.getAbilities().instabuild = false;
+        alive.getInventory().clearContent();
+        table.session().wagerContainer().setItem(0, new ItemStack(Items.DIAMOND, 2));
+        table.session().liquidate(alive);
+        check(countIn(alive, Items.DIAMOND) == 2, "a living player did not get the stake straight back");
+        helper.succeed();
+    }
+
+    /**
+     * A duel saved while the coin was in the air pays the pot once, and breaking the table afterwards
+     * hands back nothing more. The repair used to empty seat A's escrow and leave seat B's, which the
+     * next teardown returned to its owner a second time.
+     */
+    public static void restoredDuelPaysOnce(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.COIN_FLIP.get());
+        ServerPlayer a = seat(helper, table);
+        ServerPlayer b = seat(helper, table);
+        CoinFlipSession session = (CoinFlipSession) table.session();
+        a.getInventory().clearContent();
+        b.getInventory().clearContent();
+        long mailedBefore = mailboxCount(helper, a, Items.DIAMOND) + mailboxCount(helper, b, Items.DIAMOND);
+
+        session.wagerContainer().setItem(0, new ItemStack(Items.DIAMOND, 4));
+        session.wagerContainerB().setItem(0, new ItemStack(Items.DIAMOND, 4));
+        check(session.placeWager(a) && session.placeWager(b), "the duellists could not ready");
+        check(session.gameState() == GameState.ROLLING, "the coin did not go up: " + session.gameState());
+
+        CompoundTag saved = table.saveWithFullMetadata(helper.getLevel().registryAccess());
+        BlockEntity loaded = BlockEntity.loadStatic(table.getBlockPos(), table.getBlockState(),
+                saved, helper.getLevel().registryAccess());
+        check(loaded instanceof AbstractCasinoBlockEntity, "the duel table did not load back");
+        AbstractCasinoBlockEntity restoredTable = (AbstractCasinoBlockEntity) loaded;
+        restoredTable.setLevel(helper.getLevel());
+        CoinFlipSession restored = (CoinFlipSession) restoredTable.session();
+        check(!restored.gameState().holdsEscrow(), "a restored duel is still holding the stakes");
+
+        UUID winner = restored.payoutOwner();
+        check(winner != null, "the restored duel has no named winner");
+        restored.deliverPayout(winner.equals(a.getUUID()) ? a : b);
+        restoredTable.spillEverything();
+
+        long total = countIn(a, Items.DIAMOND) + countIn(b, Items.DIAMOND)
+                + mailboxCount(helper, a, Items.DIAMOND) + mailboxCount(helper, b, Items.DIAMOND) - mailedBefore
+                + countDropped(helper, helper.absolutePos(TABLE), Items.DIAMOND);
+        check(total == 8, "a restored 4-against-4 duel handed out " + total + " diamonds");
+        // The original table is still in the world with the same duel in flight. Stand it down (its
+        // stakes go back to their owners) so it does not settle after the test has counted.
+        session.liquidate(null);
+        helper.succeed();
+    }
+
+    /** Gil keeps his fee and leaves the rest of the stack on the ground. */
+    public static void gilTakesOnlyHisFee(GameTestHelper helper) {
+        ServerPlayer player = mockPlayer(helper);
+        player.getAbilities().instabuild = false;
+        BlockPos absolute = helper.absolutePos(TABLE);
+        net.minecraft.server.level.ServerLevel level = helper.getLevel();
+        AABB around = new AABB(absolute).inflate(30.0D);
+        level.getEntitiesOfClass(com.itemcasino.entity.GamblerGoblin.class, around).forEach(g -> g.discard());
+
+        ItemEntity thrown = new ItemEntity(level, absolute.getX() + 0.5, absolute.getY() + 1, absolute.getZ() + 0.5,
+                new ItemStack(Items.GOLD_INGOT, 64));
+        var event = new net.neoforged.neoforge.event.entity.item.ItemTossEvent(thrown, player);
+        com.itemcasino.entity.GoblinSummon.onItemTossed(event);
+
+        int fee = com.itemcasino.CasinoConfig.SERVER.goblinIngotCost.get();
+        List<com.itemcasino.entity.GamblerGoblin> goblins =
+                level.getEntitiesOfClass(com.itemcasino.entity.GamblerGoblin.class, around);
+        check(!goblins.isEmpty(), "sixty-four gold ingots did not summon him");
+        check(!event.isCanceled(), "the whole stack was destroyed");
+        check(thrown.getItem().is(Items.GOLD_INGOT) && thrown.getItem().getCount() == 64 - fee,
+                "he kept " + (64 - thrown.getItem().getCount()) + " ingots, not his fee of " + fee);
+        goblins.forEach(g -> g.discard());
+        helper.succeed();
+    }
+
+    /**
+     * A full pot makes room for a loss worth more than its cheapest entry, never keeps hidden worth,
+     * and still refuses a newcomer worth less than everything it holds.
+     */
+    public static void fullPotMakesRoom(GameTestHelper helper) {
+        Jackpot pot = new Jackpot();
+        for (int damage = 1; damage <= Jackpot.MAX_ENTRIES; damage++) {
+            ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
+            sword.setDamageValue(damage);
+            pot.deposit(sword, 1);
+        }
+        check(pot.entries().size() == Jackpot.MAX_ENTRIES, "the pot holds " + pot.entries().size() + " kinds");
+        check(pot.deposit(new ItemStack(Items.COBBLESTONE), 1) == 0, "a cobblestone pushed a sword out of a full pot");
+        check(pot.deposit(new ItemStack(Items.DIAMOND), 3) == 3, "a full pot refused three diamonds");
+        check(pot.countOf(Items.DIAMOND) == 3, "the diamonds are not in the pot");
+        check(pot.entries().size() == Jackpot.MAX_ENTRIES, "the pot grew past its limit");
+        check(pot.countOf(Items.DIAMOND_SWORD) == Jackpot.MAX_ENTRIES - 1, "the diamonds did not replace exactly one sword");
+
+        Jackpot shared = Jackpot.of(helper.getLevel());
+        long books = shared.countOf(Items.ENCHANTED_BOOK);
+        Jackpot.bank(helper.getLevel(), new ItemStack(Items.ENCHANTED_BOOK), 2);
+        check(shared.countOf(Items.ENCHANTED_BOOK) == books, "an enchanted book was banked at the price of a book");
+        helper.succeed();
+    }
+
+    /** A stack bigger than the slot machine's ceiling is taken up to the ceiling; the rest stays put. */
+    public static void slotMachineTakesItsCeiling(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.SLOT_MACHINE.get());
+        ServerPlayer player = seat(helper, table);
+        CasinoSession session = table.session();
+        int most = com.itemcasino.session.SlotMachineSession.maxItemStake();
+        check(most < 64, "the ceiling is a full stack; this test needs a smaller one");
+
+        session.wagerContainer().setItem(0, new ItemStack(Items.IRON_INGOT, 64));
+        commit(session, player, session.commitWager(player));
+        check(session.escrowView().getCount() == most, "the machine took " + session.escrowView().getCount()
+                + " of 64, not its ceiling of " + most);
+        check(session.wagerStack().getCount() == 64 - most, "the slot kept " + session.wagerStack().getCount());
+        noViolation(table, "after a partial stake");
+
+        check(session.acknowledge(session.sessionId()), "the spin would not settle");
+        check(session.escrowView().isEmpty(), "the escrow survived the spin");
+        check(session.gameState() == GameState.ARMED, "the rest of the stack did not re-arm the machine: "
+                + session.gameState());
+
+        check(session.wagerStack().is(Items.IRON_INGOT) && session.wagerStack().getCount() == 64 - most,
+                "the untaken part of the stack did not stay in the slot");
+        helper.succeed();
+    }
+
     /**
      * A settled hand holds its payout until the client has shown the cards; a test has no client, so
      * it answers for one. Checks on the way that nothing was paid before that.
      */
+
     private static void revealHand(BlackjackSession session) {
         if (session.gameState() != GameState.ROLLING) return;
         check(session.peekPayout().isEmpty(), "a hand paid before its cards were shown");

@@ -123,7 +123,27 @@ class RelaxerTest {
     }
 
     @Test
+    @DisplayName("a duplication recipe with a real cost settles at that cost and is not reported")
+    void duplicationRecipeIsAPriceNotACycle() {
+        // The netherite upgrade template: seven diamonds, one netherrack and a template make two.
+        G g = new G();
+        int diamond = g.item("diamond"), netherrack = g.item("netherrack"), template = g.item("template");
+        g.recipe("duplicate", template, 2, diamond, diamond, diamond, diamond, diamond, diamond, diamond,
+                netherrack, template);
+        g.solve(new int[] { diamond, netherrack, template },
+                new long[] { Fixed.ofPoints(256), Fixed.ofPoints(1), Fixed.ofPoints(2000) },
+                new int[] { diamond });
+
+        // Within a few micro-points: every derived value is rounded up by divCeil on the way down.
+        assertTrue(Math.abs(g.v(template) - Fixed.ofPoints(1793)) <= 4,
+                "one more template costs the other ingredients, not " + Fixed.format(g.v(template)));
+
+        assertTrue(g.solution.cycles().isEmpty(), "a duplication recipe is a price, not a warning");
+    }
+
+    @Test
     @DisplayName("a pinned seed survives a cheaper recipe")
+
     void pinnedSeedWins() {
         G g = new G();
         int star = g.item("nether_star"), ingot = g.item("ingot");

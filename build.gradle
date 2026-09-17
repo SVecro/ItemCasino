@@ -1,6 +1,5 @@
 plugins {
     id 'java-library'
-    id 'maven-publish'
     id 'net.neoforged.moddev' version '2.0.141'
     id 'idea'
 }
@@ -34,16 +33,12 @@ neoForge {
             type = "gameTestServer"
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
-        data {
-            clientData()
-            programArguments.addAll '--mod', project.mod_id, '--all',
-                    '--output', file('src/generated/resources/').getAbsolutePath(),
-                    '--existing', file('src/main/resources/').getAbsolutePath()
-        }
         configureEach {
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-            logLevel = org.slf4j.event.Level.DEBUG
+            // INFO, not DEBUG: a DEBUG game-test run wrote five megabytes of registry chatter around
+            // the dozen lines anyone reads. Raise it locally when chasing something.
+            logLevel = org.slf4j.event.Level.INFO
         }
+
     }
 
     mods {
@@ -53,7 +48,6 @@ neoForge {
     }
 }
 
-sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 // The game-test datapack entries ship. A `test_instance` entry whose schema is even slightly wrong
 // fails to parse, and a mod's built-in datapack that fails to parse stops the world from loading at

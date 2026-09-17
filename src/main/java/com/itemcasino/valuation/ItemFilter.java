@@ -62,6 +62,7 @@ public final class ItemFilter {
     public static boolean isUnpriceableAsTarget(Item item) {
         if (isBlacklisted(item)) return true;
         if (isTagged(item, CasinoTags.COMPONENT_DRIVEN)) return true;
+        if (isTagged(item, CasinoTags.NOT_A_TARGET)) return true;
 
         ItemStack probe = item.getDefaultInstance();
         if (probe.isEmpty()) return true;

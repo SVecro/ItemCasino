@@ -201,20 +201,22 @@ banked, since a draw would sell their hidden worth at the bare item's price.
 
 ## 4. Verification status and recent history
 
-**Last Gradle run: `run-gametest.bat` on 2026-09-17 at 17:38 — build OK, "All 28 required tests passed"**
-(Gradle counts one more than our registered functions; the extra one was not investigated). No
-`derivation cycle` warning, no data errors. That run covers the 09-17 batch up to the release of 0.1.0
-— **it predates the 09-17 late batch** (the (i) rewrite, the Game Core, the crafting tree, Gil's
-removal), which has only been verified offline so far. Gil's game test is gone, so expect **27** now.
+**Last Gradle run: `run-gametest.bat` on 2026-09-17 at 22:37 — build OK, "All 27 required tests passed"**
+(27, one fewer than 0.1.0: Gil's test is gone). No `derivation cycle` warning, no data errors, values
+ready in 34 ms (1517 items, 0 unpriced, 1482 recipes, 12 skipped). That run covers the whole 09-17 late
+batch. The jar was opened before release: `game_core` blockstate/models/texture/loot table/recipe
+present, 12 recipes and 12 recipe advancements, no goblin class or asset, 211 lang keys, `version =
+"0.2.0"`.
 
-**Released: 0.1.0** — git tag `v0.1.0` (commit `ce995c4`), jar copied to `releases/itemcasino-0.1.0.jar`
-with its `.sha256` (`releases/` is git-ignored).
+**Released: 0.2.0** — git tag `v0.2.0`, jar in `releases/itemcasino-0.2.0.jar`
+(`b15f13bf5b4be514f32ab29aab67204ff97909b7665c268ed87a547166551cb1`) with its `.sha256`. 0.1.0 is still
+beside it. `releases/` is git-ignored. For the next release: bump `mod_version` in `gradle.properties`,
+`run-gametest.bat`, copy `build/libs/itemcasino-<version>.jar` into `releases/`, write the `.sha256`,
+tag.
 
-**0.2.0 in preparation** — `mod_version` is already bumped. What remains: `run-gametest.bat`, then copy
-`build/libs/itemcasino-0.2.0.jar` into `releases/`, write its `.sha256`, and tag `v0.2.0`. Same recipe
-for every release after it.
-
-**Not yet seen in game by Rémi:** everything of 09-17 (below), plus from 09-16: automatic payout
+**Not yet seen in game by Rémi:** everything of 09-17 (below) — in particular the eight rewritten (i)
+panels, the Game Core and the new crafting tree, which have passed the game tests but have never been
+looked at on screen — plus from 09-16: automatic payout
 delivery and the 24-tick button lock, the (i) badges in the top-right corner, the Vault banking half,
 the chip-card hints (tables and Cashier), the game in English on a French client.
 

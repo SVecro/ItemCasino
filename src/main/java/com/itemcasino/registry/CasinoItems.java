@@ -39,6 +39,10 @@ public final class CasinoItems {
     public static final DeferredItem<BlockItem> CASHIER =
             REGISTER.registerSimpleBlockItem(CasinoBlocks.CASHIER);
 
+    public static final DeferredItem<BlockItem> GAME_CORE =
+            REGISTER.registerSimpleBlockItem(CasinoBlocks.GAME_CORE);
+
+
     /** A card holding casino chips. One per stack: two balances cannot share a slot. */
     /**
      * Fire-resistant, and slow to despawn when dropped: a card can hold a fortune, and a bearer card

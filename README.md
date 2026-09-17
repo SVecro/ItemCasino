@@ -25,7 +25,9 @@ server-wide pot. Every item is priced by a valuation engine that walks the loade
   bearer: whoever holds it owns the chips.
 * **Shared jackpot**: losses at the house tables feed a server-wide pot, won only at the Vault.
 * **Pocket devices** for the Upgrader, the Dice and Blackjack.
-* **Gilded Gil**, a gambling goblin who appears when gold is thrown on the ground.
+* A **Game Core** block: 4 gold ingots and 4 redstone around a diamond, and the one ingredient every
+  table is built around. Each table is then that core, its signature item (an anvil for the Upgrader, a
+  lever for the Slot Machine, a nether star for the Vault…) and a body of planks.
 * Per-player **stats** (the `$` button in the inventory) and a **mailbox** for winnings that cannot be
   handed over immediately.
 * Item tooltips on every table; hold **Shift** over any item to see its casino value.
@@ -55,7 +57,7 @@ On the author's machine the three scripts at the root call a local Gradle 9.2.1;
 | Script | Does |
 |---|---|
 | `run-build.bat` | `gradle build` (compiles, runs the JUnit suite) → `build-errors.txt`, `build-status.txt` |
-| `run-gametest.bat` | `gradle build runGameTestServer` (27 in-world game tests) → `gametest-out.txt` |
+| `run-gametest.bat` | `gradle build runGameTestServer` (26 in-world game tests) → `gametest-out.txt` |
 
 | `run-client.bat` | `gradle runClient` |
 
@@ -67,7 +69,7 @@ JUnit suite, the pure-core self-test and the static checks (see `HANDOFF.md` §5
 ```
 src/main/java/com/itemcasino/
   core/        pure Java, no Minecraft imports: values, odds, blackjack, dice, mines, chips, state machine
-  session/     the games (one CasinoSession per table), hosted by a block, a pocket item or the goblin
+  session/     the games (one CasinoSession per table), hosted by a block or a pocket item
   block/ menu/ client/ network/ registry/
   valuation/   recipe harvesting and item prices     jackpot/  the shared pot
   player/      stats and mailbox                      gametest/ in-world tests

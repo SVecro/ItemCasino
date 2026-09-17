@@ -7,7 +7,7 @@ overview; this file is how the project is actually worked on.
 * Project: `<project folder>` — Minecraft **1.21.11**, NeoForge **21.11.42**,
   Java **21**, Gradle **9.2.1**, ModDevGradle **2.0.141**, Parchment `2025.12.20`.
 * Mod id `itemcasino`, root package `com.itemcasino`, version `0.1.0`.
-* 165 Java files in `src/main` (203 classes), 15 in `src/test`, 27 registered game tests.
+* 161 Java files in `src/main` (198 classes), 15 in `src/test`, 26 registered game tests.
 * **The project is a git repository on Rémi's disk** (since 2026-09-17, first commit = the tree the
   audit read). Commit there with `device_bash` at the end of each batch (§2.3).
 * **Languages.** Rémi writes in French: **answer him in French.** The **mod itself is English only**
@@ -28,7 +28,7 @@ overview; this file is how the project is actually worked on.
 4. Bring the tree and the jars into the sandbox (§2.3): `bash $HOME/mnt/itemcasino/tools/offline/pack-inputs.sh`
    on the device, stage `Claude outputs/offline-src.tgz` and `Claude outputs/offline-jars.tar`, then in
    the sandbox: `mkdir -p ~/ic && cd ~/ic && tar xzf <src.tgz> && bash tools/offline/setup.sh <jars.tar>`
-   and `bash tools/offline/check.sh`. Expect **ALL CHECKS PASSED** (203 classes, 0 `[removal]`
+   and `bash tools/offline/check.sh`. Expect **ALL CHECKS PASSED** (198 classes, 0 `[removal]`
    warnings, JUnit 82/82, CoreSelfTest 158/158, 0 overrides, 0 static problems).
 5. Compare `bash tools/offline/tree-hash.sh` in the sandbox with the same script on the device. Equal
    means you are working on exactly what is on his disk.
@@ -159,15 +159,19 @@ banked, since a draw would sell their hidden worth at the bare item's price.
 
 * **Pocket devices** (`pocket_upgrader`, `pocket_dice`, `pocket_blackjack`): an item hosting the same
   session in memory; settled and liquidated when the screen closes.
-* **Gilded Gil** (`gambler_goblin`): throw a gold block or 8 ingots on the ground and he appears. He
-  keeps exactly his fee (1 block, or `goblin.ingot_cost` ingots) and the rest of the stack lands on the
-  ground; he does not come when piglins are within 16 blocks (bartering). Right-click: blackjack.
-  Sneak + right-click: dice (so chips only). Leaves after 5 minutes idle; everything he holds is settled
-  on every exit path, through the mailbox when the player is dead or disconnecting (§8.18).
+* **Game Core** (`game_core`): a plain decorative block that is the one ingredient every table
+  shares. 4 gold ingots + 4 redstone around 1 diamond. It has no behaviour of its own — it exists so
+  the crafting tree has a spine, and so a casino floor can show its workings.
 * **Item tooltips**: every table and pocket device says what it is; the Chip Card shows its balance;
   holding **Shift** shows the casino value of any item the advisory table prices.
-* **Recipes** are unlocked in the recipe book by advancements (`data/itemcasino/advancement/recipes/misc`).
-  Tables drop themselves even when blown up.
+* **Recipes** share one grammar: the table's signature item on the top middle, a **Game Core** dead
+  centre, the body on the bottom row (planks, or gold blocks for the Vault), the table's own material
+  down the sides. Anvil = Upgrader, comparator = Dice, book on green wool = Blackjack, gold block
+  between iron = Coin Flip, lever = Slot Machine, TNT in stone = Mine Field, nether star in obsidian =
+  Vault, chest = Cashier. The three pocket devices wrap their table in gold nuggets and need no core of
+  their own. Every recipe is unlocked in the recipe book by an advancement
+  (`data/itemcasino/advancement/recipes/misc`): the core when you first hold a diamond, each table when
+  you first hold a core. Tables drop themselves even when blown up.
 * **Server switches**: `safety.disabled_games` (tables still open, new wagers refused); the tag
   `itemcasino:not_a_target` (empty in the mod) keeps items off the Upgrader's wheel.
 * **Randomness**: every outcome comes from `session/CasinoRandom` (a `SecureRandom`), never from the
@@ -211,6 +215,14 @@ the chip-card hints (tables and Cashier), the game in English on a French client
 
 History, newest first (the details live in the code comments and in §8):
 
+* **09-17 late** — the (i) panels rewritten to explain how each game is played (every table has one
+  now: Upgrader, Blackjack and Coin Flip only stated their edge before), each in the same shape —
+  what you put in and what you press, what it pays, the controls — and none longer than about
+  thirteen wrapped lines at the badge's 190 px. **Game Core** added and all nine table recipes
+  rebuilt around it in one grammar (§3.4). **Gilded Gil removed** with everything that served him:
+  the entity, its summon, renderer, texture, loot table, entity registry, `[goblin]` config section
+  and its game test. 198 classes, 26 game tests, 82 JUnit, 0 `[removal]` warnings.
+
 * **09-17** — full audit (`AUDIT-2026-09-17.md`) and its fixes. Rémi's decisions: ambient jackpot
   **removed**; Cashier takes **currencies only**; duel coin **weighted by the stakes**; Upgrader
   targets **unrestricted** (tag `not_a_target` created empty). Fixes: items lost when a pocket game or
@@ -240,7 +252,7 @@ History, newest first (the details live in the code comments and in §8):
   blackjack restart refund, Upgrader long shots, slot payout packets, estimated item values, stats,
   mailbox).
 * **Before** — M1–M5 of the original blueprint: Upgrader, Double or Nothing, Blackjack, Coin Flip,
-  Slot Machine, Vault, pocket devices, goblin, valuation engine, sounds, textures.
+  Slot Machine, Vault, pocket devices, valuation engine, sounds, textures.
 
 ---
 
@@ -252,7 +264,7 @@ Everything here runs in the sandbox after `setup.sh`; together it is `check.sh` 
 |---|---|
 | `pack-inputs.sh` | **Device side.** Tars the project and the classpath jars into `Claude outputs/`. |
 | `setup.sh <jars.tar>` | Extracts the jars into `.offline/jars`, writes `.offline/cp.txt`, `junit-cp.txt`, `merged-jar.txt`, and makes the tree a git repo with a baseline commit (`.offline/` is excluded). |
-| `compile.sh` | `javac` of all of `src/main/java` against the real classpath. Clean = 203 classes, 0 `[removal]` warnings (the one call with no replacement, `makeMockServerPlayerInLevel`, is suppressed in `CasinoGameTests.mockPlayer`). `-sourcepath ""` and `-implicit:none` are required: the merged jar also contains `.java` files. |
+| `compile.sh` | `javac` of all of `src/main/java` against the real classpath. Clean = 198 classes, 0 `[removal]` warnings (the one call with no replacement, `makeMockServerPlayerInLevel`, is suppressed in `CasinoGameTests.mockPlayer`). `-sourcepath ""` and `-implicit:none` are required: the merged jar also contains `.java` files. |
 | `junit.sh` | Compiles `core/**` + `src/test/java` and runs them with `RunJUnit.java` (JUnit Platform launcher). 82 tests. |
 | `static_checks.py` | JSON parses; every translation key named in Java exists in `en_us.json`, and every key in `en_us.json` is read (dynamic prefixes listed in the script); every block/item has a name; game-test functions ↔ `test_instance` JSONs pair up both ways (a function without its JSON silently never runs); no `net.minecraft.client` import outside `com.itemcasino.client`; no `base_value` object entry says `value` (§7, data maps); every `minecraft:` entry of our item tags is a real item. |
 | `check.sh` | All of the above + `tools/CoreSelfTest.java` (158 assertions) + `tools/audit_overrides.py`. |
@@ -286,7 +298,7 @@ touching anything that extends a vanilla class (`check.sh` does).
 ### The spine
 
 ```
-SessionHost (interface)             ← a block entity, a pocket item, or the goblin
+SessionHost (interface)             ← a block entity or a pocket item
    └── CasinoSession (abstract)     ← escrow, state machine, chips, payout, reveal, jackpot banking
           ├── UpgraderSession    DiceSession        BlackjackSession
           ├── CoinFlipSession    SlotMachineSession VaultSession
@@ -296,7 +308,7 @@ CashierMenu                         ← no session: a counter with two slots, pr
 
 `SessionHost` answers only what a session cannot: where am I, who is watching, where do leftovers go,
 how do I persist. Implementers: `block/AbstractCasinoBlockEntity` (persists with ValueIO),
-`session/PocketCasino.Host` (memory), `entity/GamblerGoblin` (memory, settles on every exit).
+`session/PocketCasino.Host` (memory, settles when the screen closes).
 
 ### The rules that keep the ledger honest
 
@@ -506,12 +518,13 @@ Each of these cost a round trip. Do not re-derive them.
 
 ## 8. Bugs fixed, and the lesson each one carries
 
-### 8.1 The goblin crashed the client — an accidental covariant override
+### 8.1 An entity host crashed the client — an accidental covariant override
 
-`SessionHost` declared `ServerLevel level()`. `GamblerGoblin` implemented it as
+The mod once had a wandering dealer entity (removed on 2026-09-17, but the lesson and its guard stay).
+`SessionHost` declared `ServerLevel level()`. That entity implemented it as
 `return (ServerLevel) super.level()`. But `Entity` already has `level()` returning `Level`, so Java
 accepted this as a perfectly legal covariant override — no warning. Every *vanilla* call to
-`goblin.level()` then ran that cast, and `EntityRenderer.extractRenderState` does
+the entity's `level()` then ran that cast, and `EntityRenderer.extractRenderState` does
 `Level level = entity.level()` on a client where the level is a `ClientLevel`.
 
 The cruel part: `EntityRenderDispatcher.extractEntity` catches the throwable and calls
@@ -658,10 +671,10 @@ while the wager is held, like the mine layout.
 ### 8.18 Items given to a player who could no longer keep them
 
 `CasinoSession.liquidate` added the slot, escrow and payout straight to `to.getInventory()`. Pocket
-games and Gil liquidate when their menu closes, and a menu closes for a dead player at respawn (the old
+games liquidate when their menu closes, and a menu closes for a dead player at respawn (the old
 entity's inventory is already dropped and is not copied) and for a disconnecting player after
 `PlayerList.remove` has saved them. After a chip game the card sits in the slot, so dying with a pocket
-game open, or losing the connection at Gil's table, destroyed the whole Chip Card. Everything now goes
+game open, or losing the connection with one open, destroyed the whole Chip Card. Everything now goes
 through `giveTo` → `CasinoMailbox.send`, which checks the player can receive. The Cashier's close does the
 same instead of vanilla's drop-at-feet. Regression: `liquidate_keeps_what_a_player_cannot_hold`.
 
@@ -702,8 +715,8 @@ session gains one.
 * An even coin between stakes up to 10 % apart gave the smaller stake +5.6 %. The coin is weighted.
 * `upgrader.output_count` multiplied the prize without touching the odds (180 % RTP at 2). Removed.
 * The Vault's `draw_min_value` had the same unit mistake as the ambient threshold.
-* Gil ate the whole thrown stack; the blackjack double took worn armour; a full pot refused every new
-  kind forever; component-driven items entered the pot at the bare item's price.
+* The blackjack double took worn armour; a full pot refused every new kind forever; component-driven
+  items entered the pot at the bare item's price.
 
 ### 8.23 Outcomes came from the world's random source
 
@@ -731,7 +744,7 @@ with it everything drawn next in that tick (a mine field's layout). Outcomes now
 1. **`run-client.bat`** (the game tests already passed). What to look at in game: a blackjack hand closed and reopened mid-hand (the cards come back); a duel with two unequal
    stakes (each chair shows its chance); the Cashier refusing cobblestone (and its (i)); a slot machine
    given a full stack (takes 16, says so, re-arms); Shift over any item (casino value); the item
-   tooltips of the tables; Gil summoned with 64 ingots (56 stay on the ground); the recipe book showing
+   tooltips of the tables; a Game Core crafted and then a table built around it; the recipe book showing
    the tables; the log with no `derivation cycle` warning. Plus the 09-16 list in §4.
 2. **Add a private remote** to the git repository (the Gradle wrapper is committed since 0.1.0).
 3. **Design questions still open**: should losses bank 100 % into the pot, now that the Vault destroys

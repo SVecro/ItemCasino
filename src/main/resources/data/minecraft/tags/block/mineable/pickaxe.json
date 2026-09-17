@@ -8,6 +8,7 @@
     "itemcasino:slot_machine",
     "itemcasino:vault",
     "itemcasino:mine_field",
-    "itemcasino:cashier"
+    "itemcasino:cashier",
+    "itemcasino:game_core"
   ]
 }

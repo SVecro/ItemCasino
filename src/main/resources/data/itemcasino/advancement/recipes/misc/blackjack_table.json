@@ -7,12 +7,12 @@
         "recipe": "itemcasino:blackjack_table"
       }
     },
-    "has_book": {
+    "has_game_core": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
-            "items": "minecraft:book"
+            "items": "itemcasino:game_core"
           }
         ]
       }
@@ -21,7 +21,7 @@
   "requirements": [
     [
       "has_the_recipe",
-      "has_book"
+      "has_game_core"
     ]
   ],
   "rewards": {

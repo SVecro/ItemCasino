@@ -80,9 +80,6 @@ public final class CasinoConfig {
         public final ModConfigSpec.IntValue diceRollTicks;
         public final ModConfigSpec.IntValue diceMaxPayoutChips;
 
-        // --- the goblin -----------------------------------------------------
-        public final ModConfigSpec.BooleanValue goblinEnabled;
-        public final ModConfigSpec.IntValue goblinIngotCost;
 
         // --- the jackpot ----------------------------------------------------
         public final ModConfigSpec.BooleanValue jackpotEnabled;
@@ -220,15 +217,6 @@ public final class CasinoConfig {
                             o -> o instanceof String s && s.contains(":"));
             b.pop();
 
-            b.comment("The gambling goblin").push("goblin");
-            goblinEnabled = b
-                    .comment("Summon a gambling goblin when gold is thrown on the ground.")
-                    .define("enabled", true);
-            goblinIngotCost = b
-                    .comment("Gold ingots that must be thrown at once to summon him.",
-                            "A gold block always works, whatever this is set to.")
-                    .defineInRange("ingot_cost", 8, 1, 64);
-            b.pop();
 
             b.comment("The shared jackpot").push("jackpot");
             jackpotEnabled = b

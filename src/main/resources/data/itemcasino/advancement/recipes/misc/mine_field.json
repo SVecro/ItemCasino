@@ -7,12 +7,12 @@
         "recipe": "itemcasino:mine_field"
       }
     },
-    "has_tnt": {
+    "has_game_core": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
-            "items": "minecraft:tnt"
+            "items": "itemcasino:game_core"
           }
         ]
       }
@@ -21,7 +21,7 @@
   "requirements": [
     [
       "has_the_recipe",
-      "has_tnt"
+      "has_game_core"
     ]
   ],
   "rewards": {

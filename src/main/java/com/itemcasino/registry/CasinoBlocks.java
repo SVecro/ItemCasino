@@ -54,6 +54,19 @@ public final class CasinoBlocks {
     public static final DeferredBlock<MineFieldBlock> MINE_FIELD = REGISTER.registerBlock(
             "mine_field", MineFieldBlock::new, () -> tableProperties(MapColor.COLOR_ORANGE));
 
+    /**
+     * The part every casino machine is built around, and the one ingredient they all share. It does
+     * nothing on its own: it is a crafting component you can also build with, so a casino floor can
+     * show its workings.
+     */
+    public static final DeferredBlock<Block> GAME_CORE = REGISTER.registerSimpleBlock("game_core",
+            () -> BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(3.5F, 12.0F)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL));
+
+
     // Predict the Dice took Double or Nothing's place. The alias turns every table already placed in
     // a world, and every one in an inventory, into the new one instead of letting it vanish.
     static {

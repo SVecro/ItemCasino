@@ -197,8 +197,9 @@ public final class PocketCasino {
 
         /**
          * Whatever will not fit goes to the owner's casino mailbox. {@code player.drop} was used
-         * before, which on logout threw winnings onto a floor nobody would come back to — and
-         * fires the toss event, so eight gold ingots of overflow could summon a goblin.
+         * before, which on logout threw winnings onto a floor nobody would come back to, and fired
+         * the toss event on items the player never threw.
+
          */
         @Override
         public void dropOverflow(ItemStack stack) {

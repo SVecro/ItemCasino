@@ -67,7 +67,7 @@ public class CoinFlipScreen extends AbstractCasinoScreen<CoinFlipMenu> {
 
     @Override
     protected Component infoText() {
-        return Component.translatable("itemcasino.tooltip.coin_flip_edge");
+        return Component.translatable("itemcasino.info.coin_flip");
     }
 
     @Override

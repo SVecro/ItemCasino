@@ -7,12 +7,12 @@
         "recipe": "itemcasino:vault"
       }
     },
-    "has_nether_star": {
+    "has_game_core": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
-            "items": "minecraft:nether_star"
+            "items": "itemcasino:game_core"
           }
         ]
       }
@@ -21,7 +21,7 @@
   "requirements": [
     [
       "has_the_recipe",
-      "has_nether_star"
+      "has_game_core"
     ]
   ],
   "rewards": {

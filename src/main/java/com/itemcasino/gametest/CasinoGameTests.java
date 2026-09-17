@@ -878,7 +878,8 @@ public final class CasinoGameTests {
 
     /**
      * A session torn down onto a player who cannot keep items (dead, or already disconnected) sends
-     * them to the mailbox. Pocket games and Gil tear down when their menu closes, and a menu closes
+     * them to the mailbox. A pocket game tears down when its menu closes, and a menu closes
+
      * when a dead player respawns and after a disconnecting player has been saved: adding to the
      * inventory then destroyed whatever was in the slot, a Chip Card included.
      */
@@ -958,31 +959,6 @@ public final class CasinoGameTests {
         // The original table is still in the world with the same duel in flight. Stand it down (its
         // stakes go back to their owners) so it does not settle after the test has counted.
         session.liquidate(null);
-        helper.succeed();
-    }
-
-    /** Gil keeps his fee and leaves the rest of the stack on the ground. */
-    public static void gilTakesOnlyHisFee(GameTestHelper helper) {
-        ServerPlayer player = mockPlayer(helper);
-        player.getAbilities().instabuild = false;
-        BlockPos absolute = helper.absolutePos(TABLE);
-        net.minecraft.server.level.ServerLevel level = helper.getLevel();
-        AABB around = new AABB(absolute).inflate(30.0D);
-        level.getEntitiesOfClass(com.itemcasino.entity.GamblerGoblin.class, around).forEach(g -> g.discard());
-
-        ItemEntity thrown = new ItemEntity(level, absolute.getX() + 0.5, absolute.getY() + 1, absolute.getZ() + 0.5,
-                new ItemStack(Items.GOLD_INGOT, 64));
-        var event = new net.neoforged.neoforge.event.entity.item.ItemTossEvent(thrown, player);
-        com.itemcasino.entity.GoblinSummon.onItemTossed(event);
-
-        int fee = com.itemcasino.CasinoConfig.SERVER.goblinIngotCost.get();
-        List<com.itemcasino.entity.GamblerGoblin> goblins =
-                level.getEntitiesOfClass(com.itemcasino.entity.GamblerGoblin.class, around);
-        check(!goblins.isEmpty(), "sixty-four gold ingots did not summon him");
-        check(!event.isCanceled(), "the whole stack was destroyed");
-        check(thrown.getItem().is(Items.GOLD_INGOT) && thrown.getItem().getCount() == 64 - fee,
-                "he kept " + (64 - thrown.getItem().getCount()) + " ingots, not his fee of " + fee);
-        goblins.forEach(g -> g.discard());
         helper.succeed();
     }
 

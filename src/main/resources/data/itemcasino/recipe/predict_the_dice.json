@@ -2,14 +2,15 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "RGR",
-    "GEG",
-    "RGR"
+    "QMQ",
+    "QCQ",
+    "PPP"
   ],
   "key": {
-    "R": "minecraft:redstone_block",
-    "G": "minecraft:gold_ingot",
-    "E": "minecraft:ender_eye"
+    "Q": "minecraft:quartz",
+    "M": "minecraft:comparator",
+    "C": "itemcasino:game_core",
+    "P": "#minecraft:planks"
   },
   "result": {
     "id": "itemcasino:predict_the_dice",

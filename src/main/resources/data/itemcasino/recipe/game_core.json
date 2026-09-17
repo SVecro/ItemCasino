@@ -2,18 +2,17 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "GHG",
-    "GCG",
-    "PPP"
+    "GRG",
+    "RDR",
+    "GRG"
   ],
   "key": {
     "G": "minecraft:gold_ingot",
-    "H": "minecraft:chest",
-    "C": "itemcasino:game_core",
-    "P": "#minecraft:planks"
+    "R": "minecraft:redstone",
+    "D": "minecraft:diamond"
   },
   "result": {
-    "id": "itemcasino:cashier",
+    "id": "itemcasino:game_core",
     "count": 1
   }
 }

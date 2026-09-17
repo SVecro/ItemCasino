@@ -17,7 +17,9 @@ public final class CasinoCreativeTab {
                     .title(Component.translatable("itemgroup.itemcasino.main"))
                     .icon(() -> CasinoItems.UPGRADER.get().getDefaultInstance())
                     .displayItems((params, output) -> {
+                        output.accept(CasinoItems.GAME_CORE.get());
                         output.accept(CasinoItems.UPGRADER.get());
+
                         output.accept(CasinoItems.DICE.get());
                         output.accept(CasinoItems.BLACKJACK_TABLE.get());
                         output.accept(CasinoItems.COIN_FLIP.get());

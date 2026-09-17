@@ -183,7 +183,7 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
 
     @Override
     protected Component infoText() {
-        return Component.translatable("itemcasino.tooltip.blackjack_edge");
+        return Component.translatable("itemcasino.info.blackjack");
     }
 
     @Override

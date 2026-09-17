@@ -118,9 +118,6 @@ public final class CasinoTestFunctions {
             RESTORED_DUEL_PAYS_ONCE = REGISTER.register("restored_duel_pays_once",
                     () -> CasinoGameTests::restoredDuelPaysOnce);
 
-    public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
-            GIL_TAKES_ONLY_HIS_FEE = REGISTER.register("gil_takes_only_his_fee",
-                    () -> CasinoGameTests::gilTakesOnlyHisFee);
 
     public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
             FULL_POT_MAKES_ROOM = REGISTER.register("full_pot_makes_room",

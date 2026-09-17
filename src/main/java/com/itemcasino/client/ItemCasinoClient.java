@@ -9,8 +9,7 @@ import com.itemcasino.client.screen.CashierScreen;
 import com.itemcasino.client.screen.SlotMachineScreen;
 import com.itemcasino.client.screen.VaultScreen;
 import com.itemcasino.client.screen.UpgraderScreen;
-import com.itemcasino.client.render.GoblinRenderer;
-import com.itemcasino.registry.CasinoEntities;
+
 import com.itemcasino.registry.CasinoItems;
 import net.minecraft.client.Minecraft;
 import com.itemcasino.registry.CasinoMenus;
@@ -88,6 +87,7 @@ public final class ItemCasinoClient {
         if (item == CasinoItems.VAULT.get()) return "itemcasino.tooltip.vault";
         if (item == CasinoItems.MINE_FIELD.get()) return "itemcasino.tooltip.mine_field";
         if (item == CasinoItems.CASHIER.get()) return "itemcasino.tooltip.cashier";
+        if (item == CasinoItems.GAME_CORE.get()) return "itemcasino.tooltip.game_core";
         if (item == CasinoItems.POCKET_UPGRADER.get() || item == CasinoItems.POCKET_DICE.get()
                 || item == CasinoItems.POCKET_BLACKJACK.get()) {
             return "itemcasino.tooltip.pocket";
@@ -95,17 +95,6 @@ public final class ItemCasinoClient {
         return null;
     }
 
-    @SubscribeEvent
-    public static void onRegisterLayers(
-            net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterLayerDefinitions event) {
-        event.registerLayerDefinition(GoblinRenderer.LAYER, GoblinRenderer::createLayer);
-    }
-
-    @SubscribeEvent
-    public static void onRegisterRenderers(
-            net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {
-        event.registerEntityRenderer(CasinoEntities.GOBLIN.get(), GoblinRenderer::new);
-    }
 
     @SubscribeEvent
     public static void onRegisterScreens(RegisterMenuScreensEvent event) {

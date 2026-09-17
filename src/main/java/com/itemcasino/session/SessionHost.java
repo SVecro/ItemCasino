@@ -23,11 +23,13 @@ public interface SessionHost {
     /**
      * The server level this host lives in.
      *
-     * <p>Named {@code hostLevel} rather than {@code level} on purpose. One of the implementers is a
-     * mob, and {@code Entity} already declares {@code level()}; a same-named method here would turn
-     * into a covariant override that vanilla calls on the client too — where the level is a
-     * {@code ClientLevel} and the narrowing cast fails inside the renderer. A host is only ever
-     * asked this on the server, so the interface takes a name vanilla will never collide with.
+     * <p>Named {@code hostLevel} rather than {@code level} on purpose. A host was once an entity
+     * (a wandering dealer, since removed), and {@code Entity} already declares
+     * {@code level()}: a same-named method here became a covariant override that vanilla called on
+     * the client too — where the level is a {@code ClientLevel} and the narrowing cast blew up
+     * inside the renderer. A host is only ever asked this on the server, so the interface keeps a
+     * name vanilla will never collide with, and the next entity host is safe by construction.
+
      */
     ServerLevel hostLevel();
 

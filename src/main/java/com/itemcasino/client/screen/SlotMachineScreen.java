@@ -118,17 +118,14 @@ public class SlotMachineScreen extends AbstractCasinoScreen<SlotMachineMenu> {
                 statusColour());
     }
 
-    /** The rules the paytable cannot fit: what pairs pay, and the machine's return. */
+    /** How the machine is played: what goes in, what a pair pays, and the machine's return. */
     @Override
     protected Component infoText() {
         long[] exact = SlotMachine.exactReturn();
         long returnPpm = exact[1] == 0 ? 0 : exact[0] * 1_000_000L / exact[1];
+        int most = Math.max(1, menu.readout(com.itemcasino.session.SlotMachineSession.READOUT_MAX_ITEMS));
         return Component.translatable("itemcasino.info.slots",
-                name(SlotSymbol.STAR), SlotSymbol.STAR.pairMultiplier(),
-                name(SlotSymbol.DIAMOND), SlotSymbol.DIAMOND.pairMultiplier(),
-                name(SlotSymbol.GOLD), SlotSymbol.GOLD.pairMultiplier(),
-                name(SlotSymbol.IRON), name(SlotSymbol.COPPER), name(SlotSymbol.COAL),
-                InfoBadge.percent(returnPpm));
+                most, name(SlotSymbol.IRON), InfoBadge.percent(returnPpm));
     }
 
     private static Component name(SlotSymbol symbol) {

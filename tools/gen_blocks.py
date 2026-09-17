@@ -277,6 +277,36 @@ def pocket(name, motif):
     image.save(ITEM + name + ".png")
 
 
+def core_face(px):
+    """The Game Core: a brass-cased machine part with a chip and a redstone heart.
+
+    Deliberately not a table: it is the part inside every table, so it reads as a component rather
+    than as something to sit at."""
+    rect(px, 0, 0, S - 1, S - 1, PLUM)
+    ring(px, 0, EDGE)
+    ring(px, 1, GOLD_DEEP)
+    ring(px, 2, EDGE)
+    # the chip
+    rect(px, 5, 5, 10, 10, GOLD_DEEP)
+    rect(px, 6, 6, 9, 9, GOLD)
+    rect(px, 7, 7, 8, 8, RED)
+    # its pins
+    for i in (6, 9):
+        px[i, 3] = GOLD_HI
+        px[i, 12] = GOLD_HI
+        px[3, i] = GOLD_HI
+        px[12, i] = GOLD_HI
+    for i in (4, 11):
+        px[i, 4] = GOLD_DEEP
+        px[i, 11] = GOLD_DEEP
+
+
+def core():
+    image = new()
+    core_face(image.load())
+    image.save(BLOCK + "game_core.png")
+
+
 def main():
     block("upgrader", emblem_wheel, emblem_wheel)
     block("predict_the_dice", emblem_dice, emblem_dice)
@@ -287,12 +317,13 @@ def main():
     block("mine_field", emblem_mines, emblem_mines)
     block("cashier", emblem_chip, emblem_teller)
     bottom()
+    core()
 
     pocket("pocket_upgrader", lambda px: wheel(px, 8, 8, 2.9))
     pocket("pocket_dice", lambda px: die(px, 5, 5, 6, ((1, 1), (2, 2), (3, 3))))
     pocket("pocket_blackjack", lambda px: (card(px, 4, 6, 4, 6, RED), card(px, 8, 4, 4, 6, CARD_EDGE)))
     chip_card()
-    print("wrote 9 block textures and 4 item textures")
+    print("wrote 10 block textures and 4 item textures")
 
 
 if __name__ == "__main__":

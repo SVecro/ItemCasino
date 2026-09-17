@@ -4,15 +4,15 @@
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
-        "recipe": "itemcasino:coin_flip"
+        "recipe": "itemcasino:game_core"
       }
     },
-    "has_game_core": {
+    "has_diamond": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
-            "items": "itemcasino:game_core"
+            "items": "minecraft:diamond"
           }
         ]
       }
@@ -21,12 +21,12 @@
   "requirements": [
     [
       "has_the_recipe",
-      "has_game_core"
+      "has_diamond"
     ]
   ],
   "rewards": {
     "recipes": [
-      "itemcasino:coin_flip"
+      "itemcasino:game_core"
     ]
   }
 }

@@ -7,12 +7,12 @@
         "recipe": "itemcasino:slot_machine"
       }
     },
-    "has_ender_eye": {
+    "has_game_core": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
-            "items": "minecraft:ender_eye"
+            "items": "itemcasino:game_core"
           }
         ]
       }
@@ -21,7 +21,7 @@
   "requirements": [
     [
       "has_the_recipe",
-      "has_ender_eye"
+      "has_game_core"
     ]
   ],
   "rewards": {

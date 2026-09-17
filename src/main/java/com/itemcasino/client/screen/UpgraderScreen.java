@@ -283,7 +283,7 @@ public class UpgraderScreen extends AbstractCasinoScreen<UpgraderMenu> {
 
     @Override
     protected Component infoText() {
-        return Component.translatable("itemcasino.tooltip.upgrader_edge");
+        return Component.translatable("itemcasino.info.upgrader");
     }
 
     @Override

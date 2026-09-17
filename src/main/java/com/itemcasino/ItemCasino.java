@@ -3,7 +3,6 @@ package com.itemcasino;
 import com.itemcasino.gametest.CasinoTestFunctions;
 import com.itemcasino.registry.CasinoBlockEntities;
 import com.itemcasino.registry.CasinoBlocks;
-import com.itemcasino.registry.CasinoEntities;
 import com.itemcasino.registry.CasinoCreativeTab;
 import com.itemcasino.registry.CasinoDataComponents;
 import com.itemcasino.registry.CasinoDataMaps;
@@ -34,32 +33,22 @@ public final class ItemCasino {
      */
     public static final Logger AUDIT = LoggerFactory.getLogger("ItemCasino/Audit");
 
-    /**
-     * A mob with no attribute map cannot be constructed at all, and the failure arrives as a null
-     * pointer deep in the entity's constructor rather than as anything that names the cause.
-     */
-    private static void onEntityAttributes(
-            net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent event) {
-        event.put(CasinoEntities.GOBLIN.get(),
-                com.itemcasino.entity.GamblerGoblin.attributes().build());
-    }
-
     public ItemCasino(IEventBus modBus, ModContainer container) {
         CasinoBlocks.REGISTER.register(modBus);
         CasinoDataComponents.REGISTER.register(modBus);
         CasinoItems.REGISTER.register(modBus);
         CasinoBlockEntities.REGISTER.register(modBus);
         CasinoMenus.REGISTER.register(modBus);
-        CasinoEntities.REGISTER.register(modBus);
+
         CasinoCreativeTab.REGISTER.register(modBus);
         // Registered unconditionally: the registry exists on every side, and the tests only run
         // when neoforge.enabledGameTestNamespaces names this mod.
         CasinoTestFunctions.REGISTER.register(modBus);
 
+        // Explicitly, not by annotation: @EventBusSubscriber has no bus selector any more, and this
+        // one has to land on the mod bus rather than the game bus.
         modBus.addListener(CasinoDataMaps::onRegisterDataMaps);
-        // Explicitly, not by annotation: @EventBusSubscriber has no bus selector any more,
-        // and this one has to land on the mod bus rather than the game bus.
-        modBus.addListener(ItemCasino::onEntityAttributes);
+
 
         // SERVER config holds everything a client must not be able to influence (odds, rules,
         // base values). COMMON holds constants that datagen and unit tests also need.

@@ -2,16 +2,18 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "GQG",
-    "IEI",
-    "IRI"
+    "ILI",
+    "ICI",
+    "PPP"
   ],
   "key": {
-    "G": "minecraft:gold_ingot",
-    "Q": "minecraft:quartz_block",
     "I": "minecraft:iron_ingot",
-    "E": "minecraft:ender_eye",
-    "R": "minecraft:redstone_block"
+    "L": "minecraft:lever",
+    "C": "itemcasino:game_core",
+    "P": "#minecraft:planks"
   },
-  "result": { "id": "itemcasino:slot_machine", "count": 1 }
+  "result": {
+    "id": "itemcasino:slot_machine",
+    "count": 1
+  }
 }

@@ -697,7 +697,7 @@ public abstract class CasinoSession {
      * on to it, into the mailbox when they cannot, and never into the inventory of a player who is
      * dead or already disconnected.
      *
-     * <p>That last case is why this exists. A pocket game or Gil's table is torn down when its menu
+     * <p>That last case is why this exists. A pocket game is torn down when its menu
      * closes, and a menu closes when a dead player respawns (the old player entity is removed, its
      * inventory already dropped and never copied to the new one) and when a player disconnects (after
      * {@code PlayerList.remove} has saved them). Adding to the inventory there destroyed whatever was

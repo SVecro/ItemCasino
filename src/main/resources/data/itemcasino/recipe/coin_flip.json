@@ -3,13 +3,14 @@
   "category": "misc",
   "pattern": [
     "IGI",
-    "GEG",
-    "IGI"
+    "ICI",
+    "PPP"
   ],
   "key": {
-    "I": "minecraft:iron_block",
-    "G": "minecraft:gold_ingot",
-    "E": "minecraft:ender_eye"
+    "I": "minecraft:iron_ingot",
+    "G": "minecraft:gold_block",
+    "C": "itemcasino:game_core",
+    "P": "#minecraft:planks"
   },
   "result": {
     "id": "itemcasino:coin_flip",

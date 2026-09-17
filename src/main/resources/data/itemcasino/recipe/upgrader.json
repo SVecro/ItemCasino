@@ -2,14 +2,15 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "GDG",
     "DAD",
-    "GDG"
+    "DCD",
+    "PPP"
   ],
   "key": {
-    "G": "minecraft:gold_ingot",
     "D": "minecraft:diamond",
-    "A": "minecraft:anvil"
+    "A": "minecraft:anvil",
+    "C": "itemcasino:game_core",
+    "P": "#minecraft:planks"
   },
   "result": {
     "id": "itemcasino:upgrader",

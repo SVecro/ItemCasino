@@ -2,16 +2,18 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "GPG",
-    "ITI",
-    "IRI"
+    "STS",
+    "SCS",
+    "PPP"
   ],
   "key": {
-    "G": "minecraft:gold_ingot",
-    "P": "minecraft:stone_pressure_plate",
-    "I": "minecraft:iron_ingot",
+    "S": "minecraft:stone",
     "T": "minecraft:tnt",
-    "R": "minecraft:redstone"
+    "C": "itemcasino:game_core",
+    "P": "#minecraft:planks"
   },
-  "result": { "id": "itemcasino:mine_field", "count": 1 }
+  "result": {
+    "id": "itemcasino:mine_field",
+    "count": 1
+  }
 }

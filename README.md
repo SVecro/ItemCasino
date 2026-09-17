@@ -25,9 +25,10 @@ server-wide pot. Every item is priced by a valuation engine that walks the loade
   bearer: whoever holds it owns the chips.
 * **Shared jackpot**: losses at the house tables feed a server-wide pot, won only at the Vault.
 * **Pocket devices** for the Upgrader, the Dice and Blackjack.
-* A **Game Core** block: 4 gold ingots and 4 redstone around a diamond, and the one ingredient every
-  table is built around. Each table is then that core, its signature item (an anvil for the Upgrader, a
-  lever for the Slot Machine, a nether star for the Vault…) and a body of planks.
+* A **Game Core** block: 8 redstone around a gold ingot, and the one ingredient every table is built
+  around. A table is then that core, five planks, and the one item that names it — a smithing table for
+  the Upgrader, a lever for the Slot Machine, a book for Blackjack, TNT for the Mine Field. Only the
+  Vault is gated, on a nether star, because it pays the shared pot.
 * Per-player **stats** (the `$` button in the inventory) and a **mailbox** for winnings that cannot be
   handed over immediately.
 * Item tooltips on every table; hold **Shift** over any item to see its casino value.

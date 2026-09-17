@@ -2,13 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "GHG",
-    "GCG",
+    " S ",
+    "PCP",
     "PPP"
   ],
   "key": {
-    "G": "minecraft:gold_ingot",
-    "H": "minecraft:chest",
+    "S": "minecraft:emerald",
     "C": "itemcasino:game_core",
     "P": "#minecraft:planks"
   },

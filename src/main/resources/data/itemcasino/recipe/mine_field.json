@@ -2,13 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "STS",
-    "SCS",
+    " S ",
+    "PCP",
     "PPP"
   ],
   "key": {
-    "S": "minecraft:stone",
-    "T": "minecraft:tnt",
+    "S": "minecraft:tnt",
     "C": "itemcasino:game_core",
     "P": "#minecraft:planks"
   },

@@ -2,13 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "WBW",
-    "WCW",
+    " S ",
+    "PCP",
     "PPP"
   ],
   "key": {
-    "W": "minecraft:green_wool",
-    "B": "minecraft:book",
+    "S": "minecraft:book",
     "C": "itemcasino:game_core",
     "P": "#minecraft:planks"
   },

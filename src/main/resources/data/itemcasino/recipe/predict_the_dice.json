@@ -2,13 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "QMQ",
-    "QCQ",
+    " S ",
+    "PCP",
     "PPP"
   ],
   "key": {
-    "Q": "minecraft:quartz",
-    "M": "minecraft:comparator",
+    "S": "minecraft:quartz_block",
     "C": "itemcasino:game_core",
     "P": "#minecraft:planks"
   },

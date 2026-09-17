@@ -2,15 +2,14 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "ONO",
-    "OCO",
-    "BBB"
+    " S ",
+    "PCP",
+    "PPP"
   ],
   "key": {
-    "O": "minecraft:obsidian",
-    "N": "minecraft:nether_star",
+    "S": "minecraft:nether_star",
     "C": "itemcasino:game_core",
-    "B": "minecraft:gold_block"
+    "P": "#minecraft:planks"
   },
   "result": {
     "id": "itemcasino:vault",

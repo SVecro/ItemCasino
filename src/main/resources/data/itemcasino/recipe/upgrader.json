@@ -2,13 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "DAD",
-    "DCD",
+    " S ",
+    "PCP",
     "PPP"
   ],
   "key": {
-    "D": "minecraft:diamond",
-    "A": "minecraft:anvil",
+    "S": "minecraft:smithing_table",
     "C": "itemcasino:game_core",
     "P": "#minecraft:planks"
   },

@@ -2,14 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "GRG",
-    "RDR",
-    "GRG"
+    "RRR",
+    "RGR",
+    "RRR"
   ],
   "key": {
-    "G": "minecraft:gold_ingot",
     "R": "minecraft:redstone",
-    "D": "minecraft:diamond"
+    "G": "minecraft:gold_ingot"
   },
   "result": {
     "id": "itemcasino:game_core",

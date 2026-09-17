@@ -2,13 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "ILI",
-    "ICI",
+    " S ",
+    "PCP",
     "PPP"
   ],
   "key": {
-    "I": "minecraft:iron_ingot",
-    "L": "minecraft:lever",
+    "S": "minecraft:lever",
     "C": "itemcasino:game_core",
     "P": "#minecraft:planks"
   },

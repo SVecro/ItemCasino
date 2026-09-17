@@ -160,18 +160,19 @@ banked, since a draw would sell their hidden worth at the bare item's price.
 * **Pocket devices** (`pocket_upgrader`, `pocket_dice`, `pocket_blackjack`): an item hosting the same
   session in memory; settled and liquidated when the screen closes.
 * **Game Core** (`game_core`): a plain decorative block that is the one ingredient every table
-  shares. 4 gold ingots + 4 redstone around 1 diamond. It has no behaviour of its own — it exists so
-  the crafting tree has a spine, and so a casino floor can show its workings.
+  shares. 8 redstone around 1 gold ingot. It has no behaviour of its own — it exists so the crafting
+  tree has a spine, and so a casino floor can show its workings.
 * **Item tooltips**: every table and pocket device says what it is; the Chip Card shows its balance;
   holding **Shift** shows the casino value of any item the advisory table prices.
-* **Recipes** share one grammar: the table's signature item on the top middle, a **Game Core** dead
-  centre, the body on the bottom row (planks, or gold blocks for the Vault), the table's own material
-  down the sides. Anvil = Upgrader, comparator = Dice, book on green wool = Blackjack, gold block
-  between iron = Coin Flip, lever = Slot Machine, TNT in stone = Mine Field, nether star in obsidian =
-  Vault, chest = Cashier. The three pocket devices wrap their table in gold nuggets and need no core of
-  their own. Every recipe is unlocked in the recipe book by an advancement
-  (`data/itemcasino/advancement/recipes/misc`): the core when you first hold a diamond, each table when
-  you first hold a core. Tables drop themselves even when blown up.
+* **Recipes** — eight tables, one shape, seven items each: the table's signature on the top middle, a
+  **Game Core** dead centre, planks for the rest (`" S " / "PCP" / "PPP"`). Smithing table = Upgrader,
+  quartz block = Predict the Dice, book = Blackjack, gold ingot = Coin Flip, lever = Slot Machine, TNT =
+  Mine Field, nether star = Vault, emerald = Cashier. The three pocket devices share a second shape,
+  their table folded in 4 paper and 4 gold nuggets. Nothing in the mod costs a diamond; the Vault's
+  nether star is the one deliberate gate, because the Vault pays the shared pot. Every recipe is
+  unlocked in the recipe book by an advancement (`data/itemcasino/advancement/recipes/misc`): the core
+  when you first hold redstone, each table when you first hold a core, each pocket device when you first
+  hold its table. Tables drop themselves even when blown up.
 * **Server switches**: `safety.disabled_games` (tables still open, new wagers refused); the tag
   `itemcasino:not_a_target` (empty in the mod) keeps items off the Upgrader's wheel.
 * **Randomness**: every outcome comes from `session/CasinoRandom` (a `SecureRandom`), never from the
@@ -218,8 +219,11 @@ History, newest first (the details live in the code comments and in §8):
 * **09-17 late** — the (i) panels rewritten to explain how each game is played (every table has one
   now: Upgrader, Blackjack and Coin Flip only stated their edge before), each in the same shape —
   what you put in and what you press, what it pays, the controls — and none longer than about
-  thirteen wrapped lines at the badge's 190 px. **Game Core** added and all nine table recipes
-  rebuilt around it in one grammar (§3.4). **Gilded Gil removed** with everything that served him:
+  thirteen wrapped lines at the badge's 190 px. **Game Core** added and the whole crafting tree
+  rebuilt around it (§3.4): Rémi's call was one shape for all eight tables, a core of 8 redstone and
+  1 gold, and the Vault alone kept expensive. The first pass was far too dear — 5 diamonds and 31 iron
+  for the Upgrader, 31 gold for the Vault, a diamond inside every core — and was thrown away. A table
+  is furniture, not a power item: the cost of the mod is what you stake on it. **Gilded Gil removed** with everything that served him:
   the entity, its summon, renderer, texture, loot table, entity registry, `[goblin]` config section
   and its game test. 198 classes, 26 game tests, 82 JUnit, 0 `[removal]` warnings.
 

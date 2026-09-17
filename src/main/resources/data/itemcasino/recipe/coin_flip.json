@@ -2,13 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "IGI",
-    "ICI",
+    " S ",
+    "PCP",
     "PPP"
   ],
   "key": {
-    "I": "minecraft:iron_ingot",
-    "G": "minecraft:gold_block",
+    "S": "minecraft:gold_ingot",
     "C": "itemcasino:game_core",
     "P": "#minecraft:planks"
   },

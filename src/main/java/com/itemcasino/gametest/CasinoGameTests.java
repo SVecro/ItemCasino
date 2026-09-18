@@ -257,16 +257,32 @@ public final class CasinoGameTests {
      * saved and loaded for real here, the way a chunk reload does it.
      */
     public static void interruptedBlackjackHandIsVoid(GameTestHelper helper) {
-        for (int attempt = 0; attempt < 40; attempt++) {
-            AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
-            ServerPlayer player = seat(helper, table);
-            BlackjackSession session = (BlackjackSession) table.session();
+        // The table and its player are made once, outside the loop, and every attempt leaves the
+        // table idle before the next one starts.
+        //
+        // This used to place and seat inside the loop, which looked independent and was not:
+        // place() sets the same block at the same position, so the block entity — and its session —
+        // survives, and a natural was left mid-reveal for the next attempt to trip over. Roughly
+        // one run in eleven deals a natural on the first hand, so the test failed about that often,
+        // for a reason that had nothing to do with what it was testing.
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
+        ServerPlayer player = seat(helper, table);
+        BlackjackSession session = (BlackjackSession) table.session();
 
+        for (int attempt = 0; attempt < 40; attempt++) {
+            player.getInventory().clearContent();
             session.wagerContainer().setItem(0, new ItemStack(Items.DIAMOND, 3));
             commit(session, player, session.placeWager(player));
             if (session.gameState() != GameState.ROLLING || session.table() == null
                     || session.table().phase() != BlackjackPhase.PLAYER_TURN) {
-                continue;                      // a natural settled at once; deal another
+                // A natural settled at once. Finish it properly and deal another, so the next
+                // attempt starts from an idle table rather than a hand still being revealed.
+                revealHand(session);
+                session.takePayout();
+                session.wagerContainer().setItem(0, ItemStack.EMPTY);
+                check(session.gameState() == GameState.IDLE,
+                        "a settled natural left the table in " + session.gameState());
+                continue;
             }
             List<Card> playerCards = List.copyOf(session.table().player().cards());
             Card dealerUp = session.table().dealer().get(0);

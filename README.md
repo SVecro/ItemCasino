@@ -24,6 +24,9 @@ server-wide pot. Every item is priced by a valuation engine that walks the loade
   those currencies again at value plus a 2 % fee. Other items are played at the tables. The card is
   bearer: whoever holds it owns the chips.
 * **Shared jackpot**: losses at the house tables feed a server-wide pot, won only at the Vault.
+* **Blackjack seats three.** One shoe, one dealer, each chair playing in turn against it and
+  settling on its own. You see your neighbours' bets and hands; your own is always the one in
+  front of you. The pocket version still seats one.
 * **Pocket devices** for the Upgrader, the Dice and Blackjack.
 * A **Game Core** block: 8 redstone around a gold ingot, and the one ingredient every table is built
   around. A table is then that core, five planks, and the one item that names it — a smithing table for

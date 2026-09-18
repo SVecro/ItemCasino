@@ -119,6 +119,29 @@ public abstract class AbstractCasinoBlockEntity extends BlockEntity
         setChanged();
     }
 
+    /**
+     * The same walk over the viewers, but with the packet built for each of them in turn.
+     *
+     * <p>The default in {@link SessionHost} builds one packet from the seated player's point of view
+     * and sends it to everyone, which is right for a host with a single viewer. A table with three
+     * chairs has to build three, or every chair is handed the acting player's button mask.
+     */
+    @Override
+    public void broadcastPerPlayer(
+            java.util.function.Function<ServerPlayer, IntFunction<CustomPacketPayload>> factory) {
+        if (!(this.level instanceof ServerLevel serverLevel)) return;
+        for (UUID id : Set.copyOf(viewers)) {
+            ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(id);
+            if (player == null) { viewers.remove(id); continue; }
+            if (!(player.containerMenu instanceof AbstractCasinoMenu menu)
+                    || menu.session() != session) {
+                viewers.remove(id);
+                continue;
+            }
+            CasinoNetwork.send(player, factory.apply(player).apply(player.containerMenu.containerId));
+        }
+    }
+
     @Override
     public void broadcast(IntFunction<CustomPacketPayload> factory) {
         if (!(this.level instanceof ServerLevel serverLevel)) return;

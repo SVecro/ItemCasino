@@ -7,6 +7,7 @@ import com.itemcasino.core.game.blackjack.Hand;
 import com.itemcasino.core.game.blackjack.Outcome;
 import com.itemcasino.network.s2c.S2CBlackjackSettled;
 import com.itemcasino.network.s2c.S2CBlackjackState;
+import com.itemcasino.network.s2c.SeatHand;
 
 import java.util.List;
 
@@ -28,6 +29,15 @@ public final class ClientBlackjackState {
     private static final DealClock clock = new DealClock();
 
     private static long handSession = -1;
+    /** Every chair's hand, as the server sent them. The neighbours are drawn straight from this. */
+    private static List<SeatHand> hands = List.of();
+    /**
+     * Which chair this client is sitting in, so "my hand" can be picked out of the table.
+     *
+     * <p>The packet does not say: it is the same packet for everyone at the table but the button
+     * mask. The screen knows from its own menu and tells us.
+     */
+    private static int ownSeat = 0;
     private static List<Card> playerHand = List.of();
     private static List<Card> dealerVisible = List.of();
     private static boolean holeHidden = true;
@@ -36,14 +46,44 @@ public final class ClientBlackjackState {
     private static Outcome outcome;
     private static int betUnits = 1;
     private static int deadlineTicks;
+    /** The chair the table is waiting on, or -1. */
+    private static int turn = -1;
     private static boolean acknowledged = true;
 
     private ClientBlackjackState() {}
+
+    /** Told by the screen, which is the only thing that knows this client's chair. */
+    public static void ownSeat(int seat) {
+        if (seat == ownSeat) return;
+        ownSeat = seat;
+        playerHand = ownCards();
+    }
+
+    public static int ownSeat() { return ownSeat; }
+
+    public static List<SeatHand> hands() { return hands; }
+
+    /** This client's own cards out of the table's hands, or nothing when it has no chair. */
+    private static List<Card> ownCards() {
+        for (SeatHand hand : hands) {
+            if (hand.seat() == ownSeat) return List.copyOf(hand.cards());
+        }
+        return List.of();
+    }
+
+    /** One chair's hand as last sent, or null when that chair is sitting the hand out. */
+    public static SeatHand handOf(int seat) {
+        for (SeatHand hand : hands) {
+            if (hand.seat() == seat) return hand;
+        }
+        return null;
+    }
 
     /** A packet for a hand this table has not shown yet starts from an empty felt. */
     private static void startHandIfNew(long sessionId) {
         if (sessionId == handSession) return;
         handSession = sessionId;
+        hands = List.of();
         playerHand = List.of();
         dealerVisible = List.of();
         holeHidden = true;
@@ -57,7 +97,11 @@ public final class ClientBlackjackState {
     public static void accept(S2CBlackjackState msg) {
         startHandIfNew(msg.sessionId());
         boolean wasHidden = holeHidden;
-        playerHand = List.copyOf(msg.playerHand());
+        hands = List.copyOf(msg.hands());
+        playerHand = ownCards();
+        turn = msg.turn();
+        SeatHand mine = handOf(ownSeat);
+        betUnits = mine == null ? 1 : Math.max(1, mine.betUnits());
         dealerVisible = List.copyOf(msg.dealerVisible());
         holeHidden = msg.holeHidden();
         legalMask = msg.legalMask();
@@ -72,13 +116,16 @@ public final class ClientBlackjackState {
 
     public static void accept(S2CBlackjackSettled msg) {
         startHandIfNew(msg.sessionId());
-        playerHand = List.copyOf(msg.playerFinal());
+        hands = List.copyOf(msg.hands());
+        playerHand = ownCards();
+        turn = -1;
         dealerVisible = List.copyOf(msg.dealerFinal());
         holeHidden = false;
         legalMask = 0;
-        betUnits = msg.betUnits();
+        SeatHand mine = handOf(ownSeat);
+        betUnits = mine == null ? 1 : Math.max(1, mine.betUnits());
         phase = BlackjackPhase.SETTLED;
-        outcome = Outcome.byId(msg.outcome());
+        outcome = mine == null ? null : Outcome.byId(mine.outcome());
         acknowledged = false;
         clock.dealt(playerHand.size(), dealerVisible.size());
         clock.revealHole();
@@ -104,6 +151,8 @@ public final class ClientBlackjackState {
 
     public static void reset() {
         handSession = -1;
+        hands = List.of();
+        turn = -1;
         playerHand = List.of();
         dealerVisible = List.of();
         holeHidden = true;
@@ -202,6 +251,9 @@ public final class ClientBlackjackState {
     public static int betUnits() { return betUnits; }
 
     public static int deadlineTicks() { return deadlineTicks; }
+
+    /** The chair the table is waiting on, or -1 when it is waiting on nobody. */
+    public static int turn() { return turn; }
 
     public static long handSession() { return handSession; }
 }

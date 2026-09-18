@@ -55,7 +55,7 @@ import java.util.List;
 public final class CasinoNetwork {
 
     /** Bump on any wire change: a mismatched client is then rejected at handshake. */
-    public static final String VERSION = "6";
+    public static final String VERSION = "7";
 
     private CasinoNetwork() {}
 

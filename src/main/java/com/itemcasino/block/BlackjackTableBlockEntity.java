@@ -21,7 +21,7 @@ public class BlackjackTableBlockEntity extends AbstractCasinoBlockEntity {
 
     @Override
     protected CasinoSession createSession() {
-        return new BlackjackSession(this);
+        return new BlackjackSession(this, com.itemcasino.core.game.blackjack.BlackjackTable.MAX_SEATS);
     }
 
     public BlackjackSession blackjack() {

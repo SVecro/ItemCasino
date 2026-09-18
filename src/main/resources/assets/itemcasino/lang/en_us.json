@@ -209,5 +209,7 @@
   "itemcasino.info.blackjack": "Put your stake in the slot and press Deal. Get closer to 21 than the dealer without going over.\nHit takes a card, Stand ends your turn. Double doubles the stake for exactly one more card; Surrender gives half of it back.\nA win pays x2, 21 in two cards pays x2.5, a tie returns the stake. The dealer draws to 16 and stands on 17.",
   "itemcasino.info.coin_flip": "Two chairs, one coin. Each player puts a stake of about the same worth in their own slot and presses Ready; the winner takes both.\nThe house takes nothing: each chair wins as often as its stake is large, and the percentage under each stake says how often.",
   "block.itemcasino.game_core": "Game Core",
-  "itemcasino.tooltip.game_core": "The works of a casino machine. Every table is built around one."
+  "itemcasino.tooltip.game_core": "The works of a casino machine. Every table is built around one.",
+  "itemcasino.label.empty_chair": "Empty chair",
+  "itemcasino.reject.no_stake": "Nobody has a bet down."
 }

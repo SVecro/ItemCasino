@@ -133,7 +133,10 @@ public final class ServerHandlers {
 
     public static void blackjackDeal(C2SBlackjackDeal msg, IPayloadContext context) {
         on(context, () -> resolve(context, msg.containerId()).ifPresent(ctx -> {
-            if (ctx.session() instanceof BlackjackSession blackjack) blackjack.deal(ctx.player());
+            // Dealing is part of committing now: a hand starts when the bets are down, and every
+            // box with a stake in it is dealt in. The separate deal packet stays for the clients
+            // that send it, and simply commits.
+            if (ctx.session() instanceof BlackjackSession blackjack) blackjack.commitWager(ctx.player());
         }), "blackjack_deal");
     }
 

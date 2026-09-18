@@ -255,7 +255,7 @@ public abstract class AbstractCasinoMenu extends AbstractContainerMenu {
                     case AbstractCasinoBlockEntity.DATA_SPIN_TICKS -> session.spinTicks();
                     case AbstractCasinoBlockEntity.DATA_CAN_ACT -> session.isSeated(viewer) ? 1 : 0;
                     case AbstractCasinoBlockEntity.DATA_SEAT -> session.seatIndex(viewer) + 1;
-                    case AbstractCasinoBlockEntity.DATA_OPTION -> session.option();
+                    case AbstractCasinoBlockEntity.DATA_OPTION -> session.option(viewer);
                     case AbstractCasinoBlockEntity.DATA_STAKE_A -> session.stakeMilli(0);
                     case AbstractCasinoBlockEntity.DATA_STAKE_B -> session.stakeMilli(1);
                     case AbstractCasinoBlockEntity.DATA_REELS -> session.reelState();

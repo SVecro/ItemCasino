@@ -4,6 +4,10 @@ import com.itemcasino.client.ClientBlackjackState;
 import com.itemcasino.client.CasinoSounds;
 import com.itemcasino.client.ClientSessionState;
 import com.itemcasino.client.render.CardRenderer;
+import com.itemcasino.core.game.blackjack.Outcome;
+import com.itemcasino.menu.BlackjackMenu;
+import com.itemcasino.network.s2c.SeatHand;
+import net.minecraft.client.resources.language.I18n;
 import com.itemcasino.client.render.CasinoButton;
 import com.itemcasino.client.render.CasinoPanel;
 import com.itemcasino.core.game.GameState;
@@ -130,6 +134,8 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
 
     @Override
     protected void renderTable(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        // The client has no idea which chair it is in until its own menu says so.
+        ClientBlackjackState.ownSeat(Math.max(0, menu.seatIndex()));
         int shoeX = leftPos + CasinoLayout.SHOE_X;
         int shoeY = topPos + CasinoLayout.SHOE_Y;
         shoe(graphics, shoeX, shoeY);
@@ -168,6 +174,57 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
                     leftPos + HAND_X + i * playerSpacing, topPos + PLAYER_Y,
                     shoeX, shoeY, age, ClientBlackjackState.SLIDE_TICKS);
         }
+
+        drawNeighbours(graphics);
+    }
+
+    /**
+     * The other two chairs, as plates rather than hands.
+     *
+     * <p>A card is 24 by 34, and three full hands and a dealer do not fit on 202 pixels of felt. So
+     * a neighbour is shown the way you actually read one across a table: their name, what they are
+     * holding, and whether the table is waiting on them — with their bet in the sealed box below,
+     * which the menu already put there.
+     */
+    private void drawNeighbours(GuiGraphics graphics) {
+        int seats = menu.seatCount();
+        if (seats <= 1) return;
+        int[] places = BlackjackMenu.seatsAround(menu.seatIndex(), seats);
+        neighbourPlate(graphics, places[0], CasinoLayout.NEIGHBOUR_LEFT_X);
+        neighbourPlate(graphics, places[2], CasinoLayout.NEIGHBOUR_RIGHT_X);
+    }
+
+    private void neighbourPlate(GuiGraphics graphics, int seat, int x) {
+        if (seat < 0 || seat == menu.seatIndex()) return;
+        int left = leftPos + x - 2;
+        int top = topPos + CasinoLayout.NEIGHBOUR_PLATE_Y;
+        int width = CasinoLayout.NEIGHBOUR_PLATE_W;
+        boolean theirTurn = ClientBlackjackState.turn() == seat;
+        CasinoPanel.plate(graphics, left, top, width, 20);
+        if (theirTurn) {
+            // A thin gold edge is the whole signal: the table is waiting on this chair.
+            graphics.fill(left, top, left + width, top + 1, CasinoPanel.GOLD);
+            graphics.fill(left, top + 19, left + width, top + 20, CasinoPanel.GOLD);
+        }
+
+        SeatHand hand = ClientBlackjackState.handOf(seat);
+        String name = hand == null || hand.name().isEmpty()
+                ? I18n.get("itemcasino.label.empty_chair") : hand.name();
+        graphics.drawString(font, font.plainSubstrByWidth(name, width - 4), left + 2, top + 2,
+                theirTurn ? CasinoPanel.TEXT_GOLD : CasinoPanel.TEXT_CREAM, false);
+
+        String reading;
+        if (hand == null || hand.cards().isEmpty()) {
+            reading = "--";
+        } else if (hand.outcome() >= 0) {
+            Outcome outcome = Outcome.byId(hand.outcome());
+            reading = outcome == null ? String.valueOf(hand.total())
+                    : I18n.get("itemcasino.outcome." + outcome.name().toLowerCase(java.util.Locale.ROOT));
+        } else {
+            reading = hand.total() + (hand.betUnits() > 1 ? " x2" : "");
+        }
+        graphics.drawString(font, font.plainSubstrByWidth(reading, width - 4), left + 2, top + 11,
+                CasinoPanel.TEXT_CREAM, false);
     }
 
     /** The shoe the cards come out of: the origin of every deal animation, so it is drawn there. */

@@ -52,6 +52,19 @@ public interface SessionHost {
      */
     void broadcast(IntFunction<CustomPacketPayload> factory);
 
+    /**
+     * The same, but with the packet built separately for each recipient.
+     *
+     * <p>For the tables where what a viewer may be told is not the same for everyone: at blackjack
+     * every chair is sent the whole table's cards, but the mask of buttons it may press is its own.
+     * Building one packet and sending it to all three would hand every chair the acting player's
+     * mask, and a client that believes it may act is a client that sends actions.
+     */
+    default void broadcastPerPlayer(
+            java.util.function.Function<ServerPlayer, IntFunction<CustomPacketPayload>> factory) {
+        broadcast(factory.apply(seatedPlayer()));
+    }
+
     /** The player holding the seat, if they are online and still looking at this session. */
     @Nullable
     ServerPlayer seatedPlayer();

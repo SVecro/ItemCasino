@@ -418,6 +418,80 @@ public final class CasinoGameTests {
      * whatever would not fit. A partial add therefore looked like a complete one and the remainder
      * was dropped on the floor of a method rather than the floor of the world.
      */
+    /**
+     * Three players at one table, one hand, three separate settlements.
+     *
+     * <p>This is the test the whole seat refactor exists for. It checks the things that would be
+     * invisible until somebody lost money: that each chair's stake leaves its own box and none of
+     * the others', that only the chair on turn may act, that the hand pays each chair against the
+     * same dealer, and — the one that matters most — that the table is left holding nothing
+     * afterwards. Every stake in, every payout out, nothing stranded and nothing conjured.
+     */
+    public static void threeSeatsSettleApart(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
+        BlackjackSession session = (BlackjackSession) table.session();
+        check(session.seats() == 3, "a blackjack table seated " + session.seats() + " and not three");
+
+        ServerPlayer[] players = new ServerPlayer[3];
+        for (int index = 0; index < 3; index++) {
+            players[index] = seat(helper, table);
+            players[index].getInventory().clearContent();
+            check(session.seatIndex(players[index]) == index,
+                    "the " + index + "th player through the door took seat "
+                            + session.seatIndex(players[index]));
+        }
+
+        // One diamond each, in each chair's own box.
+        for (int index = 0; index < 3; index++) {
+            net.minecraft.world.SimpleContainer box = session.seatContainer(index);
+            check(box != null, "seat " + index + " had no box to bet into");
+            box.setItem(0, new ItemStack(Items.DIAMOND, 8));
+        }
+        check(session.gameState() == GameState.ARMED, "three stakes did not arm the table");
+
+        commit(session, players[0], session.placeWager(players[0]));
+        check(session.gameState() == GameState.ROLLING, "the hand did not start");
+        for (int index = 0; index < 3; index++) {
+            check(session.seatContainer(index).getItem(0).isEmpty(),
+                    "seat " + index + "'s stake never left its box");
+        }
+
+        // Only the chair on turn may act, and the others are refused without changing anything.
+        int guard = 0;
+        while (session.table() != null
+                && session.table().phase() == BlackjackPhase.PLAYER_TURN && guard++ < 24) {
+            int turn = session.table().turn();
+            check(turn >= 0 && turn < 3, "the table was waiting on nobody while still in play");
+            for (int index = 0; index < 3; index++) {
+                if (index == turn) continue;
+                check(!session.act(players[index], session.sessionId(), BlackjackAction.STAND),
+                        "seat " + index + " acted on seat " + turn + "'s turn");
+            }
+            check(session.act(players[turn], session.sessionId(), BlackjackAction.STAND),
+                    "the chair on turn could not stand");
+        }
+        revealHand(session);
+
+        // Each chair scored against the one dealer, and each was paid its own result.
+        check(session.gameState() != GameState.ROLLING, "the hand never settled");
+        long paid = 0;
+        for (int index = 0; index < 3; index++) {
+            long mine = countIn(players[index], Items.DIAMOND)
+                    + mailboxCount(helper, players[index], Items.DIAMOND)
+                    + session.seatContainer(index).getItem(0).getCount();
+            check(mine == 0 || mine == 8 || mine == 16 || mine == 20,
+                    "seat " + index + " was paid " + mine + " diamonds for an 8-diamond bet");
+            paid += mine;
+        }
+        check(paid <= 48, "three 8-diamond bets paid " + paid + " diamonds back");
+
+        // Nothing stranded: no escrow, no buffer, no stake left in a box nobody owns.
+        check(!session.hasLiveWager(), "the table was still holding a live wager after settling");
+        check(session.peekPayout().isEmpty(), "seat 0's payout was left to be collected");
+        noViolation(table, "after a three-handed hand settled");
+        helper.succeed();
+    }
+
     public static void winPaysDoubleOnAFullStack(GameTestHelper helper) {
         AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
         ServerPlayer player = seat(helper, table);

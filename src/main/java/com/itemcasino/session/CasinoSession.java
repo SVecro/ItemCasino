@@ -154,6 +154,12 @@ public abstract class CasinoSession {
      */
     public int option() { return 0; }
 
+    /**
+     * The same setting, for one viewer. Only a table where each chair has its own answer needs it:
+     * a doubled blackjack bet is doubled for the chair that doubled it and nobody else.
+     */
+    public int option(@Nullable Player viewer) { return option(); }
+
     /** Sets that toggle. Subclasses decide when it is too late to change it. */
     public void setOption(ServerPlayer player, int value) {}
 
@@ -425,6 +431,143 @@ public abstract class CasinoSession {
         } finally {
             suppressSlotCallback = false;
         }
+        host.markDirty();
+    }
+
+    // ------------------------------------------------------------------ the same, one chair at a time
+
+    /*
+     * Everything above moves seat 0's money. Below is the same set, told which chair to move, so a
+     * table played by three people can settle each of them on its own terms. Seat 0 still goes
+     * through the fields and the save keys it always has: the twins delegate rather than duplicate,
+     * so a solo table takes exactly the path it took before chairs existed.
+     */
+
+    protected ItemStack escrowOf(int index) {
+        Seat chair = seat(index);
+        return chair != null ? chair.escrow() : escrow;
+    }
+
+    protected void setEscrowOf(int index, ItemStack stack) {
+        Seat chair = seat(index);
+        if (chair != null) chair.setEscrow(stack); else escrow = stack;
+        host.markDirty();
+    }
+
+    protected long stakeCentsOf(int index) {
+        Seat chair = seat(index);
+        return chair != null ? chair.stakeCents() : stakeCents;
+    }
+
+    protected long chipPayoutOf(int index) {
+        Seat chair = seat(index);
+        return chair != null ? chair.chipPayoutCents() : chipPayoutCents;
+    }
+
+    protected List<ItemStack> payoutOf(int index) {
+        Seat chair = seat(index);
+        return chair != null ? chair.peekPayout() : List.copyOf(payout);
+    }
+
+    /** True when the chair's committed stake is chips rather than items. */
+    protected boolean stakeIsChipsAt(int index) {
+        if (index == 0) return stakeIsChips();
+        Seat chair = seat(index);
+        if (chair == null) return false;
+        if (state.acceptsItems()) return ChipCards.isCard(chair.stack());
+        return chair.stakeCents() > 0 && ChipCards.isCard(chair.escrow());
+    }
+
+    /**
+     * Moves one chair's slot into its own escrow, recording what it staked. Synchronous and
+     * unconditional once it starts, like {@link #escrowWager}: no tick boundary between emptying
+     * the slot and recording the escrow, so the stack can never be in two places at once.
+     */
+    protected ItemStack escrowStakeFor(int index) {
+        if (index == 0) return escrowStake();
+        Seat chair = seat(index);
+        if (chair == null) return ItemStack.EMPTY;
+        ItemStack stack = chair.stack();
+        if (stack.isEmpty()) return ItemStack.EMPTY;
+        long bet = ChipCards.isCard(stack)
+                ? Chips.centsOfChips(effectiveBetChips(stack, index)) : 0L;
+        ItemStack moved = stack.copy();
+        chair.setEscrow(moved);
+        chair.quietly(() -> chair.slot().setItem(0, ItemStack.EMPTY));
+        chair.setStakeCents(bet);
+        chair.setChipPayoutCents(0);
+        host.markDirty();
+        return moved;
+    }
+
+    /** Settles one chair's chip bet: its card comes back with the new balance written on it. */
+    protected void payChipsFor(int index, long payoutCents, long stakedCents) {
+        if (index == 0) { payChips(payoutCents); return; }
+        Seat chair = seat(index);
+        if (chair == null) return;
+        ItemStack chairEscrow = chair.escrow();
+        if (chair.stakeCents() <= 0 || !ChipCards.isCard(chairEscrow)) return;
+        long paid = Math.max(0, payoutCents);
+        chair.setChipPayoutCents(paid);
+        long balance = ChipCards.balance(chairEscrow);
+        ItemStack card = chairEscrow.copy();
+        ChipCards.setBalance(card, Chips.add(Math.max(0, balance - stakedCents), paid));
+        chair.addPayout(List.of(card));
+        host.markDirty();
+    }
+
+    protected void setPayoutFor(int index, List<ItemStack> stacks) {
+        if (index == 0) { setPayout(stacks); return; }
+        Seat chair = seat(index);
+        if (chair == null) return;
+        chair.takePayout();
+        List<ItemStack> copies = new ArrayList<>(stacks.size());
+        for (ItemStack stack : stacks) if (!stack.isEmpty()) copies.add(stack.copy());
+        chair.addPayout(copies);
+        host.markDirty();
+    }
+
+    /** Banks whatever one chair's item bet did not pay back. */
+    protected void bankLossFor(int index, long stakedCount) {
+        if (index == 0) { bankLoss(stakedCount); return; }
+        ItemStack chairEscrow = escrowOf(index);
+        if (chairEscrow.isEmpty() || stakedCount <= 0) return;
+        long paidBack = 0;
+        for (ItemStack stack : payoutOf(index)) {
+            if (ItemStack.isSameItemSameComponents(stack, chairEscrow)) paidBack += stack.getCount();
+        }
+        long lost = stakedCount - paidBack;
+        if (lost > 0) com.itemcasino.jackpot.Jackpot.bank(host.hostLevel(), chairEscrow, lost);
+    }
+
+    /** Banks whatever one chair's chip bet did not pay back. */
+    protected void bankChipLossFor(int index, long stakedCents) {
+        long lost = stakedCents - chipPayoutOf(index);
+        if (lost > 0) com.itemcasino.jackpot.Jackpot.bankChips(host.hostLevel(), lost);
+    }
+
+    /**
+     * Hands one chair its winnings and puts its card back in its box.
+     *
+     * <p>Seat 0 keeps the old route — the shared payout buffer, the Collect button, the sweep to the
+     * mailbox — because that is what every solo table still uses. The other chairs have no buffer
+     * anyone can claim from, so what they won goes straight to whoever owns the chair, by UUID, and
+     * reaches them through the mailbox even if they logged out while the dealer was drawing.
+     */
+    protected void handOverSeat(int index) {
+        Seat chair = seat(index);
+        if (chair == null) return;
+        List<ItemStack> won = chair.takePayout();
+        // The card goes back in the box it was bet from, so the next hand is one click away.
+        List<ItemStack> keep = new ArrayList<>(won.size());
+        for (ItemStack stack : won) {
+            if (ChipCards.isCard(stack) && chair.stack().isEmpty()) {
+                chair.quietly(() -> chair.slot().setItem(0, stack.copy()));
+            } else {
+                keep.add(stack);
+            }
+        }
+        giveTo(ownerOfSeat(index), keep);
         host.markDirty();
     }
 

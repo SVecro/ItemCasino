@@ -41,6 +41,8 @@ public final class Seat {
     @Nullable private UUID owner;
     /** What this chair has won and not yet collected. One buffer per chair: three can win at once. */
     private final List<ItemStack> payout = new ArrayList<>();
+    /** What this chair's last chip bet paid back, in cents: the banked loss and the stats read it. */
+    private long chipPayoutCents;
 
     Seat(SessionHost host, Runnable onChanged) {
         this.slot = new SimpleContainer(1) {
@@ -89,6 +91,10 @@ public final class Seat {
 
     void setStakeCents(long cents) { this.stakeCents = cents; }
 
+    public long chipPayoutCents() { return chipPayoutCents; }
+
+    void setChipPayoutCents(long cents) { this.chipPayoutCents = cents; }
+
     @Nullable public UUID owner() { return owner; }
 
     void setOwner(@Nullable UUID owner) { this.owner = owner; }
@@ -115,6 +121,7 @@ public final class Seat {
     void clearWager() {
         escrow = ItemStack.EMPTY;
         stakeCents = 0;
+        chipPayoutCents = 0;
         owner = null;
     }
 
@@ -126,6 +133,7 @@ public final class Seat {
         out.store(prefix + "payout", ItemStack.CODEC.listOf(), List.copyOf(payout));
         out.putLong(prefix + "bet_chips", betChips);
         out.putLong(prefix + "stake_cents", stakeCents);
+        out.putLong(prefix + "chip_payout_cents", chipPayoutCents);
         if (owner != null) out.putString(prefix + "owner", owner.toString());
     }
 
@@ -137,6 +145,7 @@ public final class Seat {
         in.read(prefix + "payout", ItemStack.CODEC.listOf()).ifPresent(payout::addAll);
         betChips = Math.max(1, in.getLongOr(prefix + "bet_chips", 10L));
         stakeCents = Math.max(0, in.getLongOr(prefix + "stake_cents", 0L));
+        chipPayoutCents = Math.max(0, in.getLongOr(prefix + "chip_payout_cents", 0L));
         owner = in.getString(prefix + "owner").map(CasinoSession::parseUuid).orElse(null);
     }
 }

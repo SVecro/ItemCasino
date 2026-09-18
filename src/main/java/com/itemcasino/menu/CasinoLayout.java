@@ -49,9 +49,12 @@ public final class CasinoLayout {
      * {@link #WAGER_X} whatever chair they are in, so a table with one player looks exactly as it
      * did before there were three.
      */
-    public static final int NEIGHBOUR_Y = FELT_Y + 58;              // 76
-    public static final int NEIGHBOUR_LEFT_X = FELT_X + 2;          // 9
-    public static final int NEIGHBOUR_RIGHT_X = FELT_X + FELT_W - 18;  // 191
+    public static final int NEIGHBOUR_Y = 86;
+    public static final int NEIGHBOUR_LEFT_X = 12;
+    public static final int NEIGHBOUR_RIGHT_X = WIDTH - 30;         // 186
+    /** The plate above a neighbour's box: their name, their total, their result. */
+    public static final int NEIGHBOUR_PLATE_Y = NEIGHBOUR_Y - 22;   // 64
+    public static final int NEIGHBOUR_PLATE_W = 44;
 
     /** Player inventory, centred under the felt. */
     public static final int INV_X = (WIDTH - 9 * 18) / 2;           // 27

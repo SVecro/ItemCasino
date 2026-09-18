@@ -226,6 +226,11 @@ public class BlackjackSession extends CasinoSession {
         }
         if (!setState(GameState.LOCKED)) return false;
         beginCommit(player, 0L);
+        // beginCommit names whoever pressed the button, which is right at a table with one chair
+        // and theft at a table with three: wagerOwner is seat 0's owner, and everything seat 0 is
+        // owed -- its payout, its refund, its stats -- follows it. Left as the presser, a player who
+        // dealt for the table collected the first chair's winnings along with their own.
+        this.wagerOwner = host.seatId(0);
         touch();
         host.broadcast(id -> new S2CSessionStarted(id, sessionId, gameType(), 0));
         return deal(player, playing);
@@ -814,6 +819,19 @@ public class BlackjackSession extends CasinoSession {
 
     @Override
     public void liquidate(@Nullable ServerPlayer to) {
+        // Seat 0's own holdings go to seat 0, for the same reason: at a shared table the player who
+        // broke it, or closed the last screen, is not necessarily the one whose diamonds these are.
+        // Done here so the base class finds seat 0 already empty.
+        if (seats() > 1) {
+            java.util.UUID first = ownerOfSeat(0);
+            List<ItemStack> mine = new ArrayList<>(3);
+            if (!wagerContainer().getItem(0).isEmpty()) mine.add(wagerContainer().removeItemNoUpdate(0));
+            if (!escrow.isEmpty()) { mine.add(escrow.copy()); escrow = ItemStack.EMPTY; }
+            mine.addAll(payout);
+            payout.clear();
+            giveTo(first, mine);
+        }
+
         // Each chair's second stake goes back to the chair that put it up, not to whoever is here.
         for (int index = 0; index < seats(); index++) {
             if (doubleEscrow[index].isEmpty()) continue;

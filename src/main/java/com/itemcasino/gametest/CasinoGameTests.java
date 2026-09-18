@@ -465,7 +465,12 @@ public final class CasinoGameTests {
         }
         check(session.gameState() == GameState.ARMED, "three stakes did not arm the table");
 
-        commit(session, players[0], session.placeWager(players[0]));
+        // The LAST chair deals, on purpose. The button names whoever pressed it, and a version of
+        // this that dealt from seat 0 could not tell the difference between "seat 0 was paid" and
+        // "the player who dealt was paid" -- which is exactly the bug that shipped: the first
+        // chair's winnings followed the presser, so a player who dealt for the table collected a
+        // neighbour's refund on top of their own loss.
+        commit(session, players[2], session.placeWager(players[2]));
         check(session.gameState() == GameState.ROLLING, "the hand did not start");
         for (int index = 0; index < 3; index++) {
             check(session.seatContainer(index).getItem(0).isEmpty(),

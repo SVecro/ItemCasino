@@ -61,7 +61,8 @@ On the author's machine the three scripts at the root call a local Gradle 9.2.1;
 | Script | Does |
 |---|---|
 | `run-build.bat` | `gradle build` (compiles, runs the JUnit suite) → `build-errors.txt`, `build-status.txt` |
-| `run-gametest.bat` | `gradle build runGameTestServer` (26 in-world game tests) → `gametest-out.txt` |
+| `run-gametest.bat` | `gradle build runGameTestServer` (27 in-world game tests) → `gametest-out.txt` |
+| `run-release.bat` | builds, runs the game tests, and copies the jar into `releases/` with its `.sha256` — only if both are clean → `release-status.txt` |
 
 | `run-client.bat` | `gradle runClient` |
 

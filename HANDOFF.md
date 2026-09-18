@@ -216,9 +216,14 @@ present, 12 recipes and 12 recipe advancements, no goblin class or asset, 211 la
 
 **Released: 0.2.0** — git tag `v0.2.0`, jar in `releases/itemcasino-0.2.0.jar`
 (`b15f13bf5b4be514f32ab29aab67204ff97909b7665c268ed87a547166551cb1`) with its `.sha256`. 0.1.0 is still
-beside it. `releases/` is git-ignored. For the next release: bump `mod_version` in `gradle.properties`,
-`run-gametest.bat`, copy `build/libs/itemcasino-<version>.jar` into `releases/`, write the `.sha256`,
-tag.
+beside it. `releases/` is git-ignored.
+
+**Releasing is one `.bat` now.** Bump `mod_version` in `gradle.properties`, then `run-release.bat`:
+it builds, runs the game tests, and copies `build/libs/itemcasino-<version>.jar` into `releases/`
+with its `.sha256` — **only if the build exits 0 and the log says the required tests passed**. A
+release that ships a failing test is worse than no release, so the copy is guarded rather than
+unconditional. It leaves `release-status.txt` (version, jar path, hash, the test line) and
+`release-out.txt` (the whole log). The git tag is still done by hand, after reading the status.
 
 **Not yet seen in game by Rémi:** everything of 09-17 (below) — in particular the eight rewritten (i)
 panels, the Game Core and the new crafting tree, which have passed the game tests but have never been

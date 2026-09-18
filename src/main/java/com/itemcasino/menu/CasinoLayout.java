@@ -41,6 +41,18 @@ public final class CasinoLayout {
     public static final int WAGER_B_X = WIDTH - 36;                 // 180
     public static final int DUEL_BUTTON_W = WAGER_B_X - 4 - BUTTONS_X;
 
+    /**
+     * The other chairs' stakes at a table that seats three.
+     *
+     * <p>On the felt beside their hands, not on the action row: the row is full of buttons, and a
+     * neighbour's bet belongs in front of the neighbour. The viewer's own stake stays at
+     * {@link #WAGER_X} whatever chair they are in, so a table with one player looks exactly as it
+     * did before there were three.
+     */
+    public static final int NEIGHBOUR_Y = FELT_Y + 58;              // 76
+    public static final int NEIGHBOUR_LEFT_X = FELT_X + 2;          // 9
+    public static final int NEIGHBOUR_RIGHT_X = FELT_X + FELT_W - 18;  // 191
+
     /** Player inventory, centred under the felt. */
     public static final int INV_X = (WIDTH - 9 * 18) / 2;           // 27
     public static final int INV_Y = 143;

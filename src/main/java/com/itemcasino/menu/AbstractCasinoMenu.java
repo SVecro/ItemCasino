@@ -44,7 +44,7 @@ public abstract class AbstractCasinoMenu extends AbstractContainerMenu {
 
         checkContainerSize(wagerContainer, 1);
         addSlot(new LockableSlot(wagerContainer, 0, wagerX, wagerY,
-                () -> gameState().acceptsItems() && seatIndex() == 0, this::acceptsInSlot));
+                () -> gameState().acceptsItems() && ownsBaseSlot(), this::acceptsInSlot));
         addPlayerInventory(playerInventory);
         addDataSlots(data);
     }
@@ -62,9 +62,28 @@ public abstract class AbstractCasinoMenu extends AbstractContainerMenu {
         }
     }
 
+    /**
+     * Whether the base wager slot is this viewer's to fill.
+     *
+     * <p>Seat 0's, for every table that binds it to seat 0 — which is all of them but blackjack,
+     * where the slot is bound to whichever chair the viewer is sitting in so that their own stake is
+     * always the one in front of them.
+     */
+    protected boolean ownsBaseSlot() { return seatIndex() == 0; }
+
     // ------------------------------------------------------------------ accessors
 
     @Nullable public CasinoSession session() { return session; }
+
+    /** How many chairs this table has. */
+    public int seatCount() {
+        return Math.max(1, data.get(AbstractCasinoBlockEntity.DATA_SEATS));
+    }
+
+    /** The chair whose turn it is, or -1 when nobody may act. */
+    public int turnSeat() {
+        return data.get(AbstractCasinoBlockEntity.DATA_TURN) - 1;
+    }
 
     public GameState gameState() {
         int ordinal = data.get(AbstractCasinoBlockEntity.DATA_STATE);
@@ -250,6 +269,9 @@ public abstract class AbstractCasinoMenu extends AbstractContainerMenu {
                             (int) Math.min(Integer.MAX_VALUE, session.betChipsFor(viewer));
                     case AbstractCasinoBlockEntity.DATA_MAX_BET ->
                             (int) Math.min(Integer.MAX_VALUE, session.maxBetChips());
+                    case AbstractCasinoBlockEntity.DATA_STAKE_C -> session.stakeMilli(2);
+                    case AbstractCasinoBlockEntity.DATA_TURN -> session.turnSeat() + 1;
+                    case AbstractCasinoBlockEntity.DATA_SEATS -> session.seats();
                     default -> 0;
                 };
             }

@@ -170,6 +170,14 @@ public abstract class CasinoSession {
     public int reelState() { return -1; }
 
     /**
+     * The chair that may act right now, or -1 when none may.
+     *
+     * <p>Only a game played in turns has one. Everywhere else every seated player acts whenever the
+     * state allows it, and this stays -1.
+     */
+    public int turnSeat() { return -1; }
+
+    /**
      * Six spare display ints on the menu's data channel, for numbers a game's screen needs that
      * no shared slot carries (the Vault's chosen share and prize, the mine field's multipliers).
      * Display only, like every other data slot: nothing is paid from them.
@@ -485,6 +493,15 @@ public abstract class CasinoSession {
     }
 
     // ------------------------------------------------------------------ handing items back
+
+    /**
+     * The slot a chair stakes from, for a menu to bind to. Null for a place with no chair behind
+     * it, which is what a table that seats fewer players than the screen has places gives back.
+     */
+    @Nullable
+    public SimpleContainer seatContainer(int seat) {
+        return slotContainer(seat);
+    }
 
     /** The slot a seat stakes from. One for every solo game; a duel overrides it for seat B. */
     @Nullable

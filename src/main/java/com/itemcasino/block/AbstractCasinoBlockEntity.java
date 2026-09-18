@@ -83,7 +83,13 @@ public abstract class AbstractCasinoBlockEntity extends BlockEntity
     public static final int DATA_BET = 16;
     /** The table's own cap on one chip bet, so the bet bar's Max stops where the server would. */
     public static final int DATA_MAX_BET = 17;
-    public static final int DATA_COUNT = 18;
+    /** The third chair's stake, for the tables that seat three. */
+    public static final int DATA_STAKE_C = 18;
+    /** Whose turn it is, plus one, so 0 means "nobody's" over the int-only channel. */
+    public static final int DATA_TURN = 19;
+    /** How many chairs this table has, so a screen knows whether to draw the neighbours at all. */
+    public static final int DATA_SEATS = 20;
+    public static final int DATA_COUNT = 21;
 
     private final CasinoSession session;
     private final Set<UUID> viewers = new LinkedHashSet<>();

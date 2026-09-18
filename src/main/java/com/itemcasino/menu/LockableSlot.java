@@ -19,6 +19,8 @@ public class LockableSlot extends Slot {
 
     private final BooleanSupplier open;
     private final java.util.function.Predicate<ItemStack> accepts;
+    /** When false the slot is not drawn, not hovered and not clickable, but still counted. */
+    private BooleanSupplier shown = () -> true;
 
     public LockableSlot(Container container, int index, int x, int y, BooleanSupplier open) {
         this(container, index, x, y, open, stack -> true);
@@ -32,7 +34,26 @@ public class LockableSlot extends Slot {
     }
 
     public boolean isOpen() {
-        return open.getAsBoolean();
+        return open.getAsBoolean() && isActive();
+    }
+
+    /**
+     * Makes this slot appear only when the condition holds.
+     *
+     * <p>A menu must have the same number of slots on both sides of the wire, and the client builds
+     * its menu before it knows how many chairs the table has. So the chairs that may not exist are
+     * always created and simply hidden — vanilla skips an inactive slot when it draws, hovers and
+     * picks — rather than changing the slot count, which would leave the two sides disagreeing
+     * about what is in which slot.
+     */
+    public LockableSlot shownWhen(BooleanSupplier condition) {
+        this.shown = condition;
+        return this;
+    }
+
+    @Override
+    public boolean isActive() {
+        return shown.getAsBoolean() && super.isActive();
     }
 
     /**

@@ -242,10 +242,16 @@ path it always did. One shoe, one dealer, chairs act in turn.
 * Each chair has its own payout buffer, because three players can win one hand. Seat 0 keeps the
   shared buffer and the Collect route; the others are paid straight to their owner by UUID, through
   the mailbox, so a player who logged out while the dealer drew is still paid.
-* The menu is built per viewer: the base wager slot is bound to **that viewer's** chair and stays at
-  `WAGER_X`, and the neighbours' boxes are added at `NEIGHBOUR_LEFT_X` / `NEIGHBOUR_RIGHT_X`,
-  sealed. At a one-chair table they are hidden with `LockableSlot.shownWhen`, never removed: the
-  slot count must match on both sides of the wire.
+* The menu has **one** slot, bound to the viewer's own chair wherever they are sitting, at the
+  `WAGER_X` a solo table has always used. The first attempt gave the neighbours sealed display slots
+  too; there is no free 16 by 16 on 202 pixels of felt for them, and a neighbour bets through their
+  own screen anyway.
+* The felt at a shared table: three columns of 55 at x 10, 65 and 120, the viewer's in the middle,
+  ending at 175 before the shoe at 178. Fifty-five is five fanned cards (24 then four at the minimum
+  spacing of 7). The "You" gauge and the centred status line are **not drawn** at a shared table —
+  the first would sit on the left chair's cards, the second on the labels — and everything they said
+  moves under the hands: the name in gold for whose turn it is, the countdown beside that name once
+  it is under ten seconds, and each total in the colour of its result.
 * `SessionHost.broadcastPerPlayer` builds one packet per recipient, because every chair is shown the
   whole table's cards but only its own button mask — and the result banner is addressed to the chair
   it belongs to, or two players would watch seat 0's win.

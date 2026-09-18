@@ -21,17 +21,13 @@ import javax.annotation.Nullable;
  * put it, and the other two chairs' stakes are added afterwards, on the felt to the left and the
  * right, sealed — you can see what your neighbours bet, never touch it.
  *
- * <p>The two neighbour slots exist even at a one-seat table (the pocket device), bound to throwaway
- * containers and never openable. The slot count has to be the same on both sides of the wire, and
- * the client builds its menu before it knows how many chairs the table has; two empty slots the
- * screen never draws are a far smaller price than a menu whose two sides disagree about what is in
- * which slot, which is how duplication starts.
+ * <p>There is exactly one slot, and it is the viewer's own. The neighbours' <em>hands</em> are drawn
+ * on the felt from the packet; their stakes are not shown, because 202 pixels of felt has no free
+ * 16 by 16 left once the dealer, three hands and the action row have had their share. Nothing is
+ * lost functionally: a neighbour bets through their own screen, into this same slot bound to their
+ * own chair.
  */
 public class BlackjackMenu extends AbstractCasinoMenu {
-
-    /** The neighbours' stakes: the two slots added after the thirty-six inventory slots. */
-    public static final int NEIGHBOUR_SLOT_LEFT = INVENTORY_END;
-    public static final int NEIGHBOUR_SLOT_RIGHT = INVENTORY_END + 1;
 
     /**
      * Which chair is shown at each of the three places — left, centre, right — from the point of
@@ -53,40 +49,27 @@ public class BlackjackMenu extends AbstractCasinoMenu {
      * two encodings symmetrical and the buffer fully consumed.
      */
     public BlackjackMenu(int containerId, Inventory playerInventory, RegistryFriendlyByteBuf buffer) {
-        this(containerId, playerInventory, new SimpleContainer(1), new SimpleContainer(1),
-                new SimpleContainer(1), new SimpleContainerData(AbstractCasinoBlockEntity.DATA_COUNT),
-                null);
+        this(containerId, playerInventory, new SimpleContainer(1),
+                new SimpleContainerData(AbstractCasinoBlockEntity.DATA_COUNT), null);
         if (!buffer.readBoolean()) buffer.readBlockPos();
     }
 
     /** Server constructor, shared by the table and the pocket device. */
     public BlackjackMenu(int containerId, Inventory playerInventory, CasinoSession session,
                          Player viewer) {
-        this(containerId, playerInventory,
-                seatContainer(session, placesFor(session, viewer)[1]),
-                seatContainer(session, placesFor(session, viewer)[0]),
-                seatContainer(session, placesFor(session, viewer)[2]),
+        this(containerId, playerInventory, ownBox(session, viewer),
                 serverData(session, viewer), session);
     }
 
-    private BlackjackMenu(int containerId, Inventory playerInventory, Container centre,
-                          Container left, Container right, ContainerData data,
-                          @Nullable CasinoSession session) {
-        super(CasinoMenus.BLACKJACK_TABLE.get(), containerId, playerInventory, centre, data, session,
+    private BlackjackMenu(int containerId, Inventory playerInventory, Container own,
+                          ContainerData data, @Nullable CasinoSession session) {
+        super(CasinoMenus.BLACKJACK_TABLE.get(), containerId, playerInventory, own, data, session,
                 CasinoLayout.WAGER_X, CasinoLayout.WAGER_Y);
-        addSlot(new LockableSlot(left, 0, CasinoLayout.NEIGHBOUR_LEFT_X, CasinoLayout.NEIGHBOUR_Y,
-                () -> false, this::acceptsInSlot).shownWhen(() -> seatCount() > 1));
-        addSlot(new LockableSlot(right, 0, CasinoLayout.NEIGHBOUR_RIGHT_X, CasinoLayout.NEIGHBOUR_Y,
-                () -> false, this::acceptsInSlot).shownWhen(() -> seatCount() > 1));
     }
 
-    private static int[] placesFor(CasinoSession session, Player viewer) {
-        return seatsAround(session.seatIndex(viewer), session.seats());
-    }
-
-    /** A chair's own slot container, or a throwaway for a place with no chair behind it. */
-    private static Container seatContainer(CasinoSession session, int seat) {
-        Container container = session.seatContainer(seat);
+    /** This viewer's own box, or a throwaway one for a spectator, who may fill nothing. */
+    private static Container ownBox(CasinoSession session, Player viewer) {
+        Container container = session.seatContainer(session.seatIndex(viewer));
         return container != null ? container : new SimpleContainer(1);
     }
 

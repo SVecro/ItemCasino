@@ -49,6 +49,17 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
     /** Stops short of the shoe in the corner, so a long hand never runs underneath it. */
     private static final int HAND_SPACE = CasinoLayout.SHOE_X - HAND_X - 5;
     private static final int STATUS_Y = 96;
+    /** Under each hand: who is holding it and what it comes to. */
+    private static final int SEAT_LABEL_Y = 94;
+    /**
+     * Three hands need the whole felt, so at a shared table they start where the gauges would be
+     * and run to the shoe: 10 to 176, three columns of 55. Fifty-five is not a round number, it is
+     * the width of five fanned cards (24 for the first, then four at the minimum 7), which is the
+     * longest hand anybody plays. The "You" gauge goes, because at a shared table your total is
+     * written under your own cards along with everyone else's.
+     */
+    private static final int SHARED_HAND_X = 10;
+    private static final int SHARED_COLUMN = 55;
 
     private final Map<BlackjackAction, Button> actionButtons = new EnumMap<>(BlackjackAction.class);
 
@@ -166,65 +177,98 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
             }
         }
 
-        int playerSpacing = CardRenderer.spacingFor(player.size(), HAND_SPACE);
+        boolean shared = menu.seatCount() > 1;
+        int[] places = BlackjackMenu.seatsAround(menu.seatIndex(), menu.seatCount());
+        int ownX = shared ? placeX(1) : HAND_X;
+        int ownSpace = shared ? SHARED_COLUMN : HAND_SPACE;
+
+        int playerSpacing = CardRenderer.spacingFor(player.size(), ownSpace);
         for (int i = 0; i < player.size(); i++) {
             float age = ClientBlackjackState.placementAge(false, i, partialTick);
             if (age < 0F) continue;
             CardRenderer.drawDealt(graphics, player.get(i),
-                    leftPos + HAND_X + i * playerSpacing, topPos + PLAYER_Y,
+                    leftPos + ownX + i * playerSpacing, topPos + PLAYER_Y,
                     shoeX, shoeY, age, ClientBlackjackState.SLIDE_TICKS);
         }
 
-        drawNeighbours(graphics);
+        if (shared) {
+            drawNeighbours(graphics, places);
+            SeatHand mine = ClientBlackjackState.handOf(menu.seatIndex());
+            if (mine != null) seatLabel(graphics, leftPos + ownX, ownSpace, menu.seatIndex(), mine);
+        }
     }
 
     /**
-     * The other two chairs, as plates rather than hands.
+     * Where one of the three places starts on the felt.
      *
-     * <p>A card is 24 by 34, and three full hands and a dealer do not fit on 202 pixels of felt. So
-     * a neighbour is shown the way you actually read one across a table: their name, what they are
-     * holding, and whether the table is waiting on them — with their bet in the sealed box below,
-     * which the menu already put there.
+     * <p>The player row is split into three columns — the neighbours either side, the viewer in the
+     * middle — rather than given plates of their own somewhere else. There is nowhere else: once the
+     * dealer's row, the gauges, the status line and the action row have had their share of 202
+     * pixels, the only space left for a hand is where a hand already goes. Splitting it is also
+     * simply what a table looks like from a chair.
      */
-    private void drawNeighbours(GuiGraphics graphics) {
-        int seats = menu.seatCount();
-        if (seats <= 1) return;
-        int[] places = BlackjackMenu.seatsAround(menu.seatIndex(), seats);
-        neighbourPlate(graphics, places[0], CasinoLayout.NEIGHBOUR_LEFT_X);
-        neighbourPlate(graphics, places[2], CasinoLayout.NEIGHBOUR_RIGHT_X);
+    private int placeX(int place) {
+        return SHARED_HAND_X + place * SHARED_COLUMN;
     }
 
-    private void neighbourPlate(GuiGraphics graphics, int seat, int x) {
-        if (seat < 0 || seat == menu.seatIndex()) return;
-        int left = leftPos + x - 2;
-        int top = topPos + CasinoLayout.NEIGHBOUR_PLATE_Y;
-        int width = CasinoLayout.NEIGHBOUR_PLATE_W;
+    /**
+     * The neighbours' hands, in their columns, with their name and total underneath.
+     *
+     * <p>Their cards are laid down without the deal animation: the clock follows this client's own
+     * hand, and a neighbour's cards simply being there is the honest picture anyway — at a table you
+     * look up and they are already holding them.
+     */
+    private void drawNeighbours(GuiGraphics graphics, int[] places) {
+        for (int place = 0; place < 3; place += 2) {
+            int seat = places[place];
+            if (seat < 0 || seat == menu.seatIndex()) continue;
+            SeatHand hand = ClientBlackjackState.handOf(seat);
+            if (hand == null) continue;
+
+            int x = leftPos + placeX(place);
+            int width = SHARED_COLUMN;
+            int spacing = CardRenderer.spacingFor(hand.cards().size(), width);
+            for (int i = 0; i < hand.cards().size(); i++) {
+                CardRenderer.drawCard(graphics, hand.cards().get(i), x + i * spacing,
+                        topPos + PLAYER_Y);
+            }
+
+            seatLabel(graphics, x, width, seat, hand);
+        }
+    }
+
+    /**
+     * One line under a hand: who it belongs to, and what it comes to.
+     *
+     * <p>Gold means the table is waiting on them. Once the hand is settled the total takes the
+     * colour of the result, which is how you read a table at a glance rather than by reading words
+     * that would not fit in fifty-five pixels anyway.
+     */
+    private void seatLabel(GuiGraphics graphics, int x, int width, int seat, SeatHand hand) {
         boolean theirTurn = ClientBlackjackState.turn() == seat;
-        CasinoPanel.plate(graphics, left, top, width, 20);
+        String reading = hand.total() + (hand.betUnits() > 1 ? " x2" : "");
         if (theirTurn) {
-            // A thin gold edge is the whole signal: the table is waiting on this chair.
-            graphics.fill(left, top, left + width, top + 1, CasinoPanel.GOLD);
-            graphics.fill(left, top + 19, left + width, top + 20, CasinoPanel.GOLD);
+            int seconds = ClientBlackjackState.deadlineTicks() / 20;
+            // Only once it is short enough to matter, and beside the name of whoever it is running
+            // out on, which is the only place it means anything at a table with three chairs.
+            if (seconds <= 10) reading = seconds + "s " + reading;
         }
-
-        SeatHand hand = ClientBlackjackState.handOf(seat);
-        String name = hand == null || hand.name().isEmpty()
-                ? I18n.get("itemcasino.label.empty_chair") : hand.name();
-        graphics.drawString(font, font.plainSubstrByWidth(name, width - 4), left + 2, top + 2,
-                theirTurn ? CasinoPanel.TEXT_GOLD : CasinoPanel.TEXT_CREAM, false);
-
-        String reading;
-        if (hand == null || hand.cards().isEmpty()) {
-            reading = "--";
-        } else if (hand.outcome() >= 0) {
+        int readingColour = CasinoPanel.TEXT_CREAM;
+        if (hand.outcome() >= 0) {
             Outcome outcome = Outcome.byId(hand.outcome());
-            reading = outcome == null ? String.valueOf(hand.total())
-                    : I18n.get("itemcasino.outcome." + outcome.name().toLowerCase(java.util.Locale.ROOT));
-        } else {
-            reading = hand.total() + (hand.betUnits() > 1 ? " x2" : "");
+            if (outcome != null) {
+                readingColour = outcome.isWin() ? CasinoPanel.TEXT_WIN
+                        : outcome.isPush() ? CasinoPanel.TEXT_PUSH : CasinoPanel.TEXT_LOSE;
+            }
         }
-        graphics.drawString(font, font.plainSubstrByWidth(reading, width - 4), left + 2, top + 11,
-                CasinoPanel.TEXT_CREAM, false);
+        int readingWidth = font.width(reading);
+        // The name gets whatever the total leaves, so a long name is cut rather than the number.
+        String name = font.plainSubstrByWidth(hand.name().isEmpty() ? "?" : hand.name(),
+                width - readingWidth - 3);
+        graphics.drawString(font, name, x, topPos + SEAT_LABEL_Y,
+                theirTurn ? CasinoPanel.TEXT_GOLD : CasinoPanel.TEXT_MUTED, false);
+        graphics.drawString(font, reading, x + width - readingWidth, topPos + SEAT_LABEL_Y,
+                readingColour, false);
     }
 
     /** The shoe the cards come out of: the origin of every deal animation, so it is drawn there. */
@@ -253,10 +297,14 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
                 Component.literal(!dealt ? "--" : ClientBlackjackState.shownDealerTotal()
                         + (ClientBlackjackState.dealerHasHiddenCard() ? "+?" : "")),
                 CasinoPanel.TEXT_CREAM);
-        gauge(graphics, CasinoLayout.LEFT_GAUGE_X - 2, PLAYER_Y + 4, 46,
-                Component.translatable("itemcasino.label.you"),
-                Component.literal(!dealt ? "--" : String.valueOf(ClientBlackjackState.shownPlayerTotal())),
-                CasinoPanel.TEXT_CREAM);
+        // At a shared table this gauge would sit exactly where the left-hand chair's cards go, and
+        // its number is already written under those cards along with everyone else's.
+        if (menu.seatCount() <= 1) {
+            gauge(graphics, CasinoLayout.LEFT_GAUGE_X - 2, PLAYER_Y + 4, 46,
+                    Component.translatable("itemcasino.label.you"),
+                    Component.literal(!dealt ? "--" : String.valueOf(ClientBlackjackState.shownPlayerTotal())),
+                    CasinoPanel.TEXT_CREAM);
+        }
 
         // A badge over the sealed slot, so "doubled" is readable even at a glance.
         if (menu.option() > 1) {
@@ -264,6 +312,12 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
                     CasinoLayout.WAGER_X - 4, CasinoLayout.WAGER_Y - 9,
                     CasinoPanel.TEXT_GOLD, false);
         }
+
+        // At a shared table the felt says all of this under the hands themselves: whose turn it is
+        // in gold, how long they have left beside their name, and every result in the colour of its
+        // total. A line centred across the table would land on top of those labels, and there is no
+        // other band of felt left to put it in.
+        if (menu.seatCount() > 1) return;
 
         Outcome outcome = ClientBlackjackState.outcome();
         if (outcome != null && ClientBlackjackState.resultShown()) {

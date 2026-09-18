@@ -486,20 +486,33 @@ public final class CasinoGameTests {
             check(session.act(players[turn], session.sessionId(), BlackjackAction.STAND),
                     "the chair on turn could not stand");
         }
+        // What the table decided, taken before settling throws the hand away. Asking each chair's
+        // own settlement what it is owed is the only honest check: a bound on the total was the
+        // first attempt and it was simply wrong -- it forgot that a natural pays 5/2, so three
+        // winning chairs one of which was dealt 21 legitimately hand back 52 for 24 staked.
+        int[] owed = new int[3];
+        String[] why = new String[3];
+        com.itemcasino.core.game.blackjack.BlackjackTable finished = session.table();
+        check(finished != null, "the hand vanished before it could be settled");
+        for (int index = 0; index < 3; index++) {
+            com.itemcasino.core.game.blackjack.Settlement settled = finished.settlement(index);
+            check(settled != null, "seat " + index + " reached the end with no settlement");
+            owed[index] = (int) (8L * settled.payNumerator() / settled.payDenominator());
+            why[index] = settled.outcome().name();
+        }
+
         revealHand(session);
 
-        // Each chair scored against the one dealer, and each was paid its own result.
+        // Each chair scored against the one dealer, and each was paid exactly its own result.
         check(session.gameState() != GameState.ROLLING, "the hand never settled");
-        long paid = 0;
         for (int index = 0; index < 3; index++) {
             long mine = countIn(players[index], Items.DIAMOND)
                     + mailboxCount(helper, players[index], Items.DIAMOND)
                     + session.seatContainer(index).getItem(0).getCount();
-            check(mine == 0 || mine == 8 || mine == 16 || mine == 20,
-                    "seat " + index + " was paid " + mine + " diamonds for an 8-diamond bet");
-            paid += mine;
+            check(mine == owed[index], "seat " + index + " ended " + why[index]
+                    + ", which owes " + owed[index] + " diamonds on an 8-diamond bet, and was paid "
+                    + mine);
         }
-        check(paid <= 48, "three 8-diamond bets paid " + paid + " diamonds back");
 
         // Nothing stranded: no escrow, no buffer, no stake left in a box nobody owns.
         check(!session.hasLiveWager(), "the table was still holding a live wager after settling");

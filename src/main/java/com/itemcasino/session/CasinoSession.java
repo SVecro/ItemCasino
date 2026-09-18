@@ -82,8 +82,21 @@ public abstract class CasinoSession {
 
     private boolean suppressSlotCallback;
 
+    /**
+     * The chairs beyond the first. Seat 0's slot, escrow, stake, bet and payout are the fields
+     * above, saved under the keys they have always used; see {@link Seat} for why that asymmetry
+     * is on purpose rather than an accident.
+     */
+    private final Seat[] extra;
+
     protected CasinoSession(SessionHost host) {
+        this(host, 1);
+    }
+
+    protected CasinoSession(SessionHost host, int seats) {
         this.host = host;
+        this.extra = new Seat[Math.max(0, seats - 1)];
+        for (int i = 0; i < extra.length; i++) extra[i] = new Seat(host, this::onWagerChanged);
     }
 
     // ------------------------------------------------------------------ queries
@@ -108,8 +121,28 @@ public abstract class CasinoSession {
 
     public boolean isSeated(@Nullable Player player) { return host.isSeated(player); }
 
-    /** How many players this game seats. One for the solo games, two for a duel. */
-    public int seats() { return 1; }
+    /** How many players this game seats. One for the solo games, two for a duel, three at cards. */
+    public int seats() { return extra.length + 1; }
+
+    /**
+     * The chair at this index, or null for seat 0 and for anything out of range.
+     *
+     * <p>Null for seat 0 is not an oversight: the first chair has no {@link Seat} object, and every
+     * caller here either handles seat 0 explicitly first or is reaching for a chair it created.
+     */
+    @Nullable
+    protected Seat seat(int index) {
+        return index >= 1 && index <= extra.length ? extra[index - 1] : null;
+    }
+
+    /** Whose chips are in this chair: who staked, or failing that whoever is sitting in it. */
+    @Nullable
+    protected UUID ownerOfSeat(int index) {
+        if (index == 0) return wagerOwner != null ? wagerOwner : host.seatId(0);
+        Seat chair = seat(index);
+        UUID staked = chair == null ? null : chair.owner();
+        return staked != null ? staked : host.seatId(index);
+    }
 
     /** Which seat this player holds, or -1. Only a duel has more than one. */
     public int seatIndex(@Nullable Player player) { return host.seatIndex(player); }
@@ -163,7 +196,11 @@ public abstract class CasinoSession {
     public boolean stillValid(Player player) { return host.stillValid(player); }
 
     public boolean hasLiveWager() {
-        return state.holdsEscrow() || !escrow.isEmpty() || !payout.isEmpty();
+        if (state.holdsEscrow() || !escrow.isEmpty() || !payout.isEmpty()) return true;
+        for (Seat chair : extra) {
+            if (!chair.escrow().isEmpty() || chair.hasPayout()) return true;
+        }
+        return false;
     }
 
     /** A live wager keeps the odds it was locked against, whatever {@code /reload} does after. */
@@ -223,8 +260,11 @@ public abstract class CasinoSession {
     /** The most chips one bet may stake at this table; {@link Long#MAX_VALUE} for no limit. */
     public long maxBetChips() { return Long.MAX_VALUE; }
 
-    /** The bet setting for a seat. One for every table but the duel. */
-    public long betChips(int seat) { return betChips; }
+    /** The bet setting for a seat. Every chair chooses its own. */
+    public long betChips(int seat) {
+        Seat chair = seat(seat);
+        return chair != null ? chair.betChips() : betChips;
+    }
 
     /** The bet setting of whoever is looking, for the menu's data channel. */
     public long betChipsFor(@Nullable Player viewer) {
@@ -245,7 +285,8 @@ public abstract class CasinoSession {
     }
 
     protected void storeBet(int seat, long chips) {
-        betChips = chips;
+        Seat chair = seat(seat);
+        if (chair != null) chair.setBetChips(chips); else betChips = chips;
     }
 
     /** What a card would stake right now: the setting, capped by the table and by the card. */
@@ -448,7 +489,9 @@ public abstract class CasinoSession {
     /** The slot a seat stakes from. One for every solo game; a duel overrides it for seat B. */
     @Nullable
     protected SimpleContainer slotContainer(int seat) {
-        return seat == 0 ? wager : null;
+        if (seat == 0) return wager;
+        Seat chair = seat(seat);
+        return chair == null ? null : chair.slot();
     }
 
     /**
@@ -686,10 +729,31 @@ public abstract class CasinoSession {
         payout.clear();
 
         giveTo(to, everything);
+        liquidateExtraSeats();
         state = GameState.IDLE;
         deadlineTick = 0;
         wagerOwner = null;
         host.markDirty();
+    }
+
+    /**
+     * Hands every other chair back what it put in, to <em>its own</em> owner.
+     *
+     * <p>Not to the player passed to {@link #liquidate}: that is whoever broke the table or closed
+     * the last screen, and paying three players' stakes to one of them is theft dressed up as
+     * cleanup. Offline owners are covered because the mailbox takes a UUID, not a player.
+     */
+    protected void liquidateExtraSeats() {
+        for (int index = 1; index < seats(); index++) {
+            Seat chair = seat(index);
+            if (chair == null || !chair.holdsAnything()) continue;
+            List<ItemStack> mine = new ArrayList<>(3);
+            if (!chair.stack().isEmpty()) mine.add(chair.slot().removeItemNoUpdate(0));
+            if (!chair.escrow().isEmpty()) mine.add(chair.escrow().copy());
+            mine.addAll(chair.takePayout());
+            chair.clearWager();
+            giveTo(ownerOfSeat(index), mine);
+        }
     }
 
     /**
@@ -707,6 +771,27 @@ public abstract class CasinoSession {
         if (stacks.isEmpty()) return;
         net.minecraft.server.MinecraftServer server = to == null ? null : to.level().getServer();
         if (server != null && com.itemcasino.player.CasinoMailbox.send(server, to.getUUID(), stacks)) return;
+        for (ItemStack stack : stacks) {
+            if (!stack.isEmpty()) host.dropOverflow(stack.copy());
+        }
+    }
+
+    /**
+     * The same, to an owner who may be nowhere near the table — or nowhere in the world. The
+     * mailbox is addressed by UUID, so a chair whose player logged out mid-hand is still paid.
+     */
+    protected void giveTo(@Nullable UUID owner, List<ItemStack> stacks) {
+        if (stacks.isEmpty()) return;
+        net.minecraft.server.MinecraftServer server = null;
+        if (owner != null) {
+            try {
+                ServerLevel level = host.hostLevel();
+                server = level == null ? null : level.getServer();
+            } catch (RuntimeException ignored) {
+                server = null;
+            }
+        }
+        if (server != null && com.itemcasino.player.CasinoMailbox.send(server, owner, stacks)) return;
         for (ItemStack stack : stacks) {
             if (!stack.isEmpty()) host.dropOverflow(stack.copy());
         }
@@ -859,6 +944,9 @@ public abstract class CasinoSession {
         out.putLong("stake_cents", stakeCents);
         out.putLong("chip_payout_cents", chipPayoutCents);
         if (wagerOwner != null) out.putString("wager_owner", wagerOwner.toString());
+        for (int index = 1; index <= extra.length; index++) {
+            extra[index - 1].save(out, "seat" + index + "_");
+        }
     }
 
     public void load(ValueInput in) {
@@ -882,6 +970,9 @@ public abstract class CasinoSession {
         stakeCents = Math.max(0, in.getLongOr("stake_cents", 0L));
         chipPayoutCents = Math.max(0, in.getLongOr("chip_payout_cents", 0L));
         wagerOwner = in.getString("wager_owner").map(CasinoSession::parseUuid).orElse(null);
+        for (int index = 1; index <= extra.length; index++) {
+            extra[index - 1].load(in, "seat" + index + "_");
+        }
         repairAfterLoad();
     }
 

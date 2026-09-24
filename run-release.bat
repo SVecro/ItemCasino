@@ -14,8 +14,6 @@ rem  Leaves release-status.txt (the summary) and release-out.txt (the whole log)
 rem ---------------------------------------------------------------------------
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
-set "V=9.2.1"
-set "D=%USERPROFILE%\gradle-dist"
 
 rem --- the version to release, straight from gradle.properties ---------------
 set "MODVER="
@@ -36,7 +34,7 @@ echo   building and running the game tests, this takes a minute...
 echo RUNNING !MODVER!> release-status.txt
 del /q release-out.txt 2>nul
 
-call "%D%\gradle-%V%\bin\gradle.bat" build runGameTestServer --console=plain > release-out.txt 2>&1
+call gradlew.bat build runGameTestServer --console=plain > release-out.txt 2>&1
 set "RC=!ERRORLEVEL!"
 echo EXITCODE=!RC!>> release-out.txt
 

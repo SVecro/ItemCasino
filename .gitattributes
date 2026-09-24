@@ -1,0 +1,10 @@
+# Line endings are fixed here rather than left to each machine's git settings.
+# The shell scripts need LF to run on Linux and macOS (and on CI); the .bat files
+# need CRLF, or cmd.exe can misread labels and multi-line blocks.
+/gradlew        text eol=lf
+*.sh            text eol=lf
+*.bat           text eol=crlf
+
+# Never touch binaries.
+*.jar           binary
+*.png           binary

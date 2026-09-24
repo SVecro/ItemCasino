@@ -1,0 +1,66 @@
+name: Build
+
+# Every push and every pull request: compile, run the JUnit suite, then start a headless
+# game-test server and run the in-world tests. NeoForge's GameTestServer exits with the number
+# of failed required tests, so a single failing test fails this job, and under GitHub Actions it
+# also prints an error annotation naming the failed tests.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and game tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Validates gradle-wrapper.jar against Gradle's published checksums, and caches the Gradle
+      # user home: the dependencies, the decompiled and recompiled Minecraft, and the game assets.
+      # The first run fills it (several minutes); later runs reuse it. Only main writes the cache.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Build and unit tests
+        run: ./gradlew build --console=plain
+
+      - name: Game tests
+        run: ./gradlew runGameTestServer --console=plain
+
+      - name: Upload the jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: itemcasino-${{ github.sha }}
+          path: build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the logs of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-${{ github.sha }}
+          path: |
+            build/reports/
+            run/logs/
+            run/crash-reports/
+          if-no-files-found: ignore
+          retention-days: 14

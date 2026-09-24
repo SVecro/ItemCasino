@@ -51,6 +51,10 @@ public final class CasinoTestFunctions {
                     () -> CasinoGameTests::invariantsHoldAcrossAFullCycle);
 
     public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
+            LOBBY_WAITS_FOR_EVERY_BET = REGISTER.register("lobby_waits_for_every_bet",
+                    () -> CasinoGameTests::lobbyWaitsForEveryBet);
+
+    public static final DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>>
             THREE_SEATS_SETTLE_APART = REGISTER.register("three_seats_settle_apart",
                     () -> CasinoGameTests::threeSeatsSettleApart);
 

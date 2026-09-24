@@ -210,5 +210,8 @@
   "itemcasino.info.coin_flip": "Two chairs, one coin. Each player puts a stake of about the same worth in their own slot and presses Ready; the winner takes both.\nThe house takes nothing: each chair wins as often as its stake is large, and the percentage under each stake says how often.",
   "block.itemcasino.game_core": "Game Core",
   "itemcasino.tooltip.game_core": "The works of a casino machine. Every table is built around one.",
-  "itemcasino.reject.no_stake": "Nobody has a bet down."
+  "itemcasino.reject.no_stake": "Nobody has a bet down.",
+  "itemcasino.label.seat_ready": "Ready",
+  "itemcasino.label.seat_waiting": "Betting",
+  "itemcasino.label.deal_in": "Dealing in %ss"
 }

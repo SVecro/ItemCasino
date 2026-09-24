@@ -435,6 +435,52 @@ public final class CasinoGameTests {
      * was dropped on the floor of a method rather than the floor of the world.
      */
     /**
+     * The lobby: the dealer waits for every bet on the table to say it is ready.
+     *
+     * <p>Without this, any chair could deal while a neighbour was still choosing what to bet -- and
+     * that is not a small annoyance, it is how the first shared table paid a neighbour's refund to
+     * whoever reached the button first.
+     */
+    public static void lobbyWaitsForEveryBet(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
+        BlackjackSession session = (BlackjackSession) table.session();
+        ServerPlayer[] players = new ServerPlayer[3];
+        for (int index = 0; index < 3; index++) {
+            players[index] = seat(helper, table);
+            players[index].getInventory().clearContent();
+        }
+
+        // Two chairs bet; the third sits the hand out and must not hold the table up.
+        session.seatContainer(0).setItem(0, new ItemStack(Items.DIAMOND, 8));
+        session.seatContainer(1).setItem(0, new ItemStack(Items.DIAMOND, 8));
+        check(session.gameState() == GameState.ARMED, "two bets did not arm the table");
+
+        check(session.commitWager(players[0]), "the first chair could not say it was ready");
+        check(session.isReady(0), "saying ready did not take");
+        check(session.gameState() == GameState.ARMED,
+                "the hand started with one bet still deciding");
+
+        // Pressing again takes the word back, so a chair can change its mind until the cards come out.
+        check(session.commitWager(players[0]), "the first chair could not take its word back");
+        check(!session.isReady(0), "pressing ready twice did not take it back");
+        check(session.gameState() == GameState.ARMED, "taking a word back started the hand");
+
+        check(session.commitWager(players[0]), "the first chair could not say it was ready again");
+        check(session.commitWager(players[1]), "the second chair could not say it was ready");
+        check(session.gameState() == GameState.ROLLING,
+                "the hand did not start once every bet was ready");
+
+        check(session.table() != null, "the hand started without a table");
+        check(session.table().isPlaying(0) && session.table().isPlaying(1),
+                "a chair that was ready was not dealt in");
+        check(!session.table().isPlaying(2), "the empty chair was dealt in");
+        check(!session.isReady(0) && !session.isReady(1),
+                "the ready flags survived into the hand");
+        noViolation(table, "with a hand dealt from the lobby");
+        helper.succeed();
+    }
+
+    /**
      * Three players at one table, one hand, three separate settlements.
      *
      * <p>This is the test the whole seat refactor exists for. It checks the things that would be

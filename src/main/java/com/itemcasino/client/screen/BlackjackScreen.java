@@ -6,6 +6,7 @@ import com.itemcasino.client.ClientSessionState;
 import com.itemcasino.client.render.CardRenderer;
 import com.itemcasino.core.game.blackjack.Outcome;
 import com.itemcasino.menu.BlackjackMenu;
+import com.itemcasino.session.BlackjackSession;
 import com.itemcasino.network.s2c.SeatHand;
 import net.minecraft.client.resources.language.I18n;
 import com.itemcasino.client.render.CasinoButton;
@@ -69,7 +70,10 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
 
     @Override
     protected String wagerLabelKey() {
-        return "itemcasino.button.deal";
+        // At a shared table the button does not deal, it says you are ready to play what is in your
+        // box. The dealer deals when everyone with a bet down has said so, or when the clock runs
+        // out on those who have not.
+        return menu.seatCount() > 1 ? "itemcasino.button.ready" : "itemcasino.button.deal";
     }
 
     @Override
@@ -271,6 +275,36 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
                 readingColour, false);
     }
 
+    /**
+     * Between hands: who has said they are ready, and how long the others have to join them.
+     *
+     * <p>Drawn in the same three columns the hands use, so a chair is in the same place whether it
+     * is holding cards or deciding whether to. Names are not sent while the table is idle, so a
+     * chair is named by where it is sitting rather than by who is in it.
+     */
+    private void drawLobby(GuiGraphics graphics) {
+        int seats = menu.seatCount();
+        int[] places = BlackjackMenu.seatsAround(menu.seatIndex(), seats);
+        int readyMask = menu.readout(BlackjackSession.READOUT_READY);
+        for (int place = 0; place < 3; place++) {
+            int seat = places[place];
+            if (seat < 0) continue;
+            boolean isReady = (readyMask & (1 << seat)) != 0;
+            boolean mine = seat == menu.seatIndex();
+            Component word = Component.translatable(isReady
+                    ? "itemcasino.label.seat_ready" : "itemcasino.label.seat_waiting");
+            graphics.drawString(font, word, leftPos + placeX(place), topPos + SEAT_LABEL_Y,
+                    isReady ? CasinoPanel.TEXT_WIN : (mine ? CasinoPanel.TEXT_CREAM : CasinoPanel.TEXT_MUTED),
+                    false);
+        }
+
+        int seconds = menu.readout(BlackjackSession.READOUT_COUNTDOWN);
+        if (seconds > 0) {
+            centred(graphics, Component.translatable("itemcasino.label.deal_in", seconds),
+                    CasinoLayout.CENTRE_X, STATUS_Y, CasinoPanel.TEXT_GOLD);
+        }
+    }
+
     /** The shoe the cards come out of: the origin of every deal animation, so it is drawn there. */
     private void shoe(GuiGraphics graphics, int x, int y) {
         graphics.fill(x - 3, y - 3, x + CardRenderer.CARD_WIDTH + 3,
@@ -316,8 +350,12 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
         // At a shared table the felt says all of this under the hands themselves: whose turn it is
         // in gold, how long they have left beside their name, and every result in the colour of its
         // total. A line centred across the table would land on top of those labels, and there is no
-        // other band of felt left to put it in.
-        if (menu.seatCount() > 1) return;
+        // other band of felt left to put it in. The one thing that has nowhere else to go is the
+        // lobby, and during the lobby there are no hands and so no labels to collide with.
+        if (menu.seatCount() > 1) {
+            if (ClientBlackjackState.hands().isEmpty()) drawLobby(graphics);
+            return;
+        }
 
         Outcome outcome = ClientBlackjackState.outcome();
         if (outcome != null && ClientBlackjackState.resultShown()) {

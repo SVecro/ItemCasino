@@ -114,6 +114,7 @@ public final class CasinoConfig {
         public final ModConfigSpec.BooleanValue allowSurrender;
         public final ModConfigSpec.BooleanValue dealerPeek;
         public final ModConfigSpec.IntValue playerActionSeconds;
+        public final ModConfigSpec.IntValue readySeconds;
 
         // --- safety -------------------------------------------------------
         public final ModConfigSpec.IntValue packetsPerSecond;
@@ -305,6 +306,11 @@ public final class CasinoConfig {
             playerActionSeconds = b
                     .comment("Seconds the player has to act before the server forces a stand.")
                     .defineInRange("player_action_seconds", 60, 5, 600);
+            readySeconds = b
+                    .comment("At a table seating more than one, the countdown that starts when the",
+                             "first player says they are ready. The hand is dealt when everyone with a",
+                             "bet down is ready, or when this runs out, to whoever is ready by then.")
+                    .defineInRange("ready_seconds", 20, 5, 300);
             b.pop();
 
             b.comment("Integrity and safety").push("safety");

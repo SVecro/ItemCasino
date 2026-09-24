@@ -62,6 +62,10 @@ public class BlackjackSession extends CasinoSession {
     private final boolean[] doubledChips;
     /** Which chairs were dealt in this hand, as a bitmask, so a restore deals to the same ones. */
     private int handPlaying;
+    /** Who has said they are ready to play the next hand. Only a table with more than one chair. */
+    private final boolean[] ready;
+    /** When the countdown that started at the first "ready" runs out; 0 when none is running. */
+    private long readyDeadlineTick;
 
     /** The shoe's seed; 0 when no hand is in flight. Server-side only, never sent to a client. */
     private long handSeed;
@@ -98,6 +102,32 @@ public class BlackjackSession extends CasinoSession {
         this.doubleEscrow = new ItemStack[seats()];
         java.util.Arrays.fill(this.doubleEscrow, ItemStack.EMPTY);
         this.doubledChips = new boolean[seats()];
+        this.ready = new boolean[seats()];
+    }
+
+    /** Read-out 0: who is ready, as a bitmask. Read-out 1: seconds left on the countdown. */
+    public static final int READOUT_READY = 0;
+    public static final int READOUT_COUNTDOWN = 1;
+
+    @Override
+    public int readout(int index) {
+        if (index == READOUT_READY) {
+            int mask = 0;
+            for (int seat = 0; seat < ready.length; seat++) if (ready[seat]) mask |= 1 << seat;
+            return mask;
+        }
+        if (index == READOUT_COUNTDOWN) return countdownSeconds();
+        return 0;
+    }
+
+    private int countdownSeconds() {
+        if (readyDeadlineTick <= 0) return 0;
+        try {
+            long left = readyDeadlineTick - host.hostLevel().getGameTime();
+            return (int) Math.max(0, (left + 19) / 20);
+        } catch (RuntimeException e) {
+            return 0;
+        }
     }
 
     @Override
@@ -146,9 +176,33 @@ public class BlackjackSession extends CasinoSession {
         if (state == GameState.LOCKED || state == GameState.ROLLING) return;
         boolean anyone = false;
         for (int index = 0; index < seats(); index++) {
-            if (!slotStackOf(index).isEmpty()) { anyone = true; break; }
+            // Changing what is in a box withdraws that chair's word that it was ready to play it.
+            if (slotStackOf(index).isEmpty()) ready[index] = false;
+            else anyone = true;
+        }
+        if (!anyone) {
+            java.util.Arrays.fill(ready, false);
+            readyDeadlineTick = 0;
         }
         setState(anyone ? GameState.ARMED : GameState.IDLE);
+    }
+
+    /**
+     * A chair leaving the table takes its word with it, so the others are not held to a hand that
+     * one of them is no longer at.
+     */
+    @Override
+    public void onMenuClosed(Player player) {
+        int index = seatIndex(player);
+        if (index >= 0 && index < ready.length && state.acceptsItems()) {
+            ready[index] = false;
+            host.markDirty();
+        }
+        super.onMenuClosed(player);
+    }
+
+    public boolean isReady(int index) {
+        return index >= 0 && index < ready.length && ready[index];
     }
 
     /**
@@ -212,6 +266,77 @@ public class BlackjackSession extends CasinoSession {
             return false;
         }
 
+        return startHand(player, playing, snapshot);
+    }
+
+    /**
+     * The lobby: a chair says it is ready to play what is in its box.
+     *
+     * <p>The first one to say so starts a countdown. The hand is dealt when every chair with a bet
+     * down is ready, or when the countdown runs out, to whoever is ready by then. Pressing again
+     * takes the word back, which is why a chair can change its mind right up until the cards come
+     * out. A chair that says nothing simply sits the hand out with its bet still in its box.
+     *
+     * <p>Only at a table that seats more than one. A pocket device deals the moment you press it.
+     */
+    private boolean saysReady(ServerPlayer player) {
+        if (state != GameState.ARMED) return false;
+        if (!isSeated(player)) return false;
+        if (!CasinoConfig.SERVER.allowCreative.get() && player.getAbilities().instabuild) {
+            player.displayClientMessage(Component.translatable("itemcasino.reject.creative"), true);
+            return false;
+        }
+        int index = seatIndex(player);
+        if (index < 0 || index >= ready.length) return false;
+        if (slotStackOf(index).isEmpty()) {
+            player.displayClientMessage(Component.translatable("itemcasino.reject.no_stake"), true);
+            return false;
+        }
+        ValuationSnapshot snapshot = ValuationEngine.snapshot();
+        if (!checkStakeAt(player, index, snapshot)) return false;
+
+        ready[index] = !ready[index];
+        if (ready[index] && readyDeadlineTick == 0) {
+            readyDeadlineTick = host.hostLevel().getGameTime()
+                    + CasinoConfig.SERVER.readySeconds.get() * 20L;
+        }
+        if (!anyReady()) readyDeadlineTick = 0;
+        host.markDirty();
+        touch();
+        if (everyBetIsReady()) return startHand(player, readySeats(), snapshot);
+        return true;
+    }
+
+    private boolean anyReady() {
+        for (boolean r : ready) if (r) return true;
+        return false;
+    }
+
+    /** Every chair with something in its box has said it is ready, and at least one has. */
+    private boolean everyBetIsReady() {
+        boolean any = false;
+        for (int index = 0; index < seats(); index++) {
+            if (slotStackOf(index).isEmpty()) continue;
+            if (!ready[index]) return false;
+            any = true;
+        }
+        return any;
+    }
+
+    private boolean[] readySeats() {
+        boolean[] playing = new boolean[seats()];
+        for (int index = 0; index < seats(); index++) {
+            playing[index] = ready[index] && !slotStackOf(index).isEmpty();
+        }
+        return playing;
+    }
+
+    /**
+     * Takes the stakes and deals. Shared by the one-chair table, which starts on the button, and by
+     * the lobby, which starts when everyone is ready or the countdown runs out.
+     */
+    private boolean startHand(@Nullable ServerPlayer initiator, boolean[] playing,
+                              ValuationSnapshot snapshot) {
         this.frozenSnapshot = snapshot;
         this.sessionId++;
         java.util.Arrays.fill(doubledChips, false);
@@ -225,15 +350,32 @@ public class BlackjackSession extends CasinoSession {
             setSeatOwner(index);
         }
         if (!setState(GameState.LOCKED)) return false;
-        beginCommit(player, 0L);
-        // beginCommit names whoever pressed the button, which is right at a table with one chair
-        // and theft at a table with three: wagerOwner is seat 0's owner, and everything seat 0 is
-        // owed -- its payout, its refund, its stats -- follows it. Left as the presser, a player who
+        armAcknowledgement(0L);
+        // Seat 0's owner, never whoever pressed the button: wagerOwner is what everything seat 0 is
+        // owed follows -- its payout, its refund, its stats. Named after the presser, a player who
         // dealt for the table collected the first chair's winnings along with their own.
         this.wagerOwner = host.seatId(0);
+        java.util.Arrays.fill(ready, false);
+        readyDeadlineTick = 0;
         touch();
         host.broadcast(id -> new S2CSessionStarted(id, sessionId, gameType(), 0));
-        return deal(player, playing);
+        return deal(initiator, playing);
+    }
+
+    /** The countdown runs on the server, so a client that never reports back cannot stall a table. */
+    @Override
+    public void tick() {
+        if (seats() > 1 && state == GameState.ARMED && readyDeadlineTick > 0
+                && host.hostLevel().getGameTime() >= readyDeadlineTick) {
+            boolean[] playing = readySeats();
+            readyDeadlineTick = 0;
+            boolean any = false;
+            for (boolean p : playing) if (p) { any = true; break; }
+            if (any) startHand(null, playing, ValuationEngine.snapshot());
+            else java.util.Arrays.fill(ready, false);
+            host.markDirty();
+        }
+        super.tick();
     }
 
     /** The presser's own box, refused out loud. */
@@ -270,7 +412,7 @@ public class BlackjackSession extends CasinoSession {
         // Seat 0's owner is the base class's wagerOwner, set by beginCommit.
     }
 
-    public boolean deal(ServerPlayer player, boolean[] playing) {
+    public boolean deal(@Nullable ServerPlayer player, boolean[] playing) {
         if (state != GameState.LOCKED) return false;
 
         RandomSource random = host.random();
@@ -298,7 +440,7 @@ public class BlackjackSession extends CasinoSession {
                         .append('/').append(stakeCentsOf(index)).append('c');
             }
             ItemCasino.AUDIT.info("[wager] {} blackjack session={} seats{}",
-                    player.getName().getString(), sessionId, boxes);
+                    player == null ? "countdown" : player.getName().getString(), sessionId, boxes);
         }
         if (table.phase() == BlackjackPhase.SETTLED) beginReveal();   // naturals can end it at once
         else broadcastState();
@@ -409,7 +551,9 @@ public class BlackjackSession extends CasinoSession {
     }
 
     @Override
-    public boolean commitWager(ServerPlayer player) { return placeWager(player); }
+    public boolean commitWager(ServerPlayer player) {
+        return seats() > 1 ? saysReady(player) : placeWager(player);
+    }
 
     @Override
     public boolean acknowledge(long claimedSession) { return finishReveal(claimedSession); }

@@ -22,8 +22,14 @@ attached to the matching [GitHub release](https://github.com/SVecro/ItemCasino/r
 **Fixes**
 - At a shared table, the player who pressed *Deal* collected what the first chair was owed: its
   winnings, its refund and its stats. Seat 0's money now follows seat 0.
+- After a hand, the lobby's ready marks and countdown never showed: the finished hand stayed on the
+  felt until the next one was dealt. It is now swept away (below).
+- Typing in the Upgrader's search box: E closed the table, Q dropped the hovered item and digits
+  swapped it with the hotbar. The box now keeps every key while it has the focus.
 
 **Changes**
+- A finished blackjack hand stays on the felt for 2.5 seconds, long enough to read who won, then is
+  swept off the table; at once if someone at the table has already said *Ready*.
 - Casino tables are wooden furniture: they break by hand or faster with an axe, as fast as a
   crafting table, and no longer need a pickaxe. They still resist explosions and are not set alight by
   lava, because a table can be holding a stake. The Game Core stays a pickaxe block.

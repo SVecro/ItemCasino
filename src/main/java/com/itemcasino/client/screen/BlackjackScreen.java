@@ -104,6 +104,11 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
     @Override
     protected void containerTick() {
         if (ClientBlackjackState.tick()) CasinoSounds.card();
+        // Someone has said they are ready for the next hand: the last one comes off the felt now,
+        // so the countdown is on screen for the whole of it.
+        if (menu.seatCount() > 1 && menu.readout(BlackjackSession.READOUT_COUNTDOWN) > 0) {
+            ClientBlackjackState.hurrySweep();
+        }
         super.containerTick();
         // The server holds the payout until the hand has been shown; this says it has. Its own
         // deadline pays anyway if this never arrives, so it is only ever a way to be quicker.
@@ -157,6 +162,26 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
         int shoeY = topPos + CasinoLayout.SHOE_Y;
         shoe(graphics, shoeX, shoeY);
 
+        // A finished hand is swept off the felt to the left, cards and labels together, picking up
+        // speed as it goes; the felt's edge cuts them off, so they leave the table rather than slide
+        // over the frame.
+        float sweep = ClientBlackjackState.sweepProgress(partialTick);
+        if (sweep >= 0F) {
+            graphics.enableScissor(leftPos + CasinoLayout.FELT_X, topPos + CasinoLayout.FELT_Y,
+                    leftPos + CasinoLayout.FELT_X + CasinoLayout.FELT_W,
+                    topPos + CasinoLayout.FELT_Y + CasinoLayout.FELT_H);
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(-sweep * sweep * (CasinoLayout.FELT_W + CardRenderer.CARD_WIDTH), 0F);
+        }
+        drawHands(graphics, partialTick, shoeX, shoeY);
+        if (sweep >= 0F) {
+            graphics.pose().popMatrix();
+            graphics.disableScissor();
+        }
+    }
+
+    /** Every card on the felt and the line under each hand. */
+    private void drawHands(GuiGraphics graphics, float partialTick, int shoeX, int shoeY) {
         List<Card> dealer = ClientBlackjackState.dealerVisible();
         List<Card> player = ClientBlackjackState.playerHand();
         boolean holeHidden = ClientBlackjackState.holeHidden();
@@ -364,6 +389,7 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
         }
 
         Outcome outcome = ClientBlackjackState.outcome();
+        if (ClientBlackjackState.sweeping()) return;   // the hand is leaving the felt, and its result with it
         if (outcome != null && ClientBlackjackState.resultShown()) {
             centred(graphics, Component.translatable(
                             "itemcasino.outcome." + outcome.name().toLowerCase(Locale.ROOT)),
@@ -390,7 +416,7 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
         // A settled hand tints the felt's edge rather than covering it: the player wants to see the
         // cards that beat them, not a banner sitting on top of them.
         Outcome outcome = ClientBlackjackState.outcome();
-        if (outcome == null || !ClientBlackjackState.resultShown()) return;
+        if (outcome == null || !ClientBlackjackState.resultShown() || ClientBlackjackState.sweeping()) return;
         int colour = outcome.isWin() ? 0x807BD88F
                 : outcome.isPush() ? 0x80E3CE7A : 0x80E07A6B;
         CasinoPanel.frame(graphics, leftPos + CasinoLayout.FELT_X - 1,

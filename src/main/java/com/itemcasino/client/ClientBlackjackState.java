@@ -25,6 +25,10 @@ public final class ClientBlackjackState {
 
     public static final int SLIDE_TICKS = DealClock.SLIDE_TICKS;
     public static final int FLIP_TICKS = DealClock.FLIP_TICKS;
+    /** How long a finished hand stays on the felt before it is swept away: time to read it. */
+    public static final int SWEEP_HOLD_TICKS = 50;
+    /** How long the sweep itself takes. */
+    public static final int SWEEP_TICKS = 10;
 
     private static final DealClock clock = new DealClock();
 
@@ -49,6 +53,10 @@ public final class ClientBlackjackState {
     /** The chair the table is waiting on, or -1. */
     private static int turn = -1;
     private static boolean acknowledged = true;
+    /** Ticks left before a finished hand is swept away, or -1 when none is waiting. */
+    private static int sweepHold = -1;
+    /** Ticks into the sweep, or -1 when the felt is not being swept. */
+    private static int sweepAge = -1;
 
     private ClientBlackjackState() {}
 
@@ -91,6 +99,8 @@ public final class ClientBlackjackState {
         outcome = null;
         betUnits = 1;
         acknowledged = true;
+        sweepHold = -1;
+        sweepAge = -1;
         clock.newHand();
     }
 
@@ -139,7 +149,64 @@ public final class ClientBlackjackState {
      */
     public static boolean tick() {
         if (deadlineTicks > 0) deadlineTicks--;
-        return clock.tick();
+        boolean laid = clock.tick();
+        advanceSweep();
+        return laid;
+    }
+
+    // ------------------------------------------------------------------ the sweep
+
+    /**
+     * A finished hand is left on the felt long enough to read who won, then swept off it, the way a
+     * dealer clears a table before the next round. Until it is, the felt still belongs to the old
+     * hand -- and at a shared table the lobby (who is ready, the countdown) is only drawn on an
+     * empty felt, which is why the countdown never appeared after a hand before this.
+     */
+    private static void advanceSweep() {
+        if (sweepAge >= 0) {
+            if (++sweepAge >= SWEEP_TICKS) clearFelt();
+            return;
+        }
+        if (!finishedAndShown()) return;
+        if (sweepHold < 0) sweepHold = SWEEP_HOLD_TICKS;
+        else if (--sweepHold <= 0) sweepAge = 0;
+    }
+
+    /** The table is about to be used again (a countdown has started): sweep now, not in a moment. */
+    public static void hurrySweep() {
+        if (sweepAge < 0 && finishedAndShown()) sweepAge = 0;
+    }
+
+    private static boolean finishedAndShown() {
+        return phase == BlackjackPhase.SETTLED && clock.resultShown()
+                && (!hands.isEmpty() || !dealerVisible.isEmpty());
+    }
+
+    /** How far the sweep has gone, 0 to 1, or -1 when the felt is not being swept. */
+    public static float sweepProgress(float partialTick) {
+        if (sweepAge < 0) return -1F;
+        return Math.min(1F, (sweepAge + partialTick) / SWEEP_TICKS);
+    }
+
+    public static boolean sweeping() { return sweepAge >= 0; }
+
+    /**
+     * An empty felt. The hand's session is kept: it was shown and acknowledged, and the next hand
+     * arrives under a new one anyway.
+     */
+    private static void clearFelt() {
+        hands = List.of();
+        playerHand = List.of();
+        dealerVisible = List.of();
+        holeHidden = true;
+        legalMask = 0;
+        phase = BlackjackPhase.WAITING;
+        outcome = null;
+        betUnits = 1;
+        turn = -1;
+        sweepHold = -1;
+        sweepAge = -1;
+        clock.newHand();
     }
 
     /** True exactly once, when the settled hand has been shown in full: the cue to tell the server. */
@@ -162,6 +229,8 @@ public final class ClientBlackjackState {
         betUnits = 1;
         deadlineTicks = 0;
         acknowledged = true;
+        sweepHold = -1;
+        sweepAge = -1;
         clock.newHand();
     }
 

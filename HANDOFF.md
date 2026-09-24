@@ -234,6 +234,14 @@ banked, since a draw would sell their hidden worth at the bare item's price.
   coin and dice replay a decided outcome; the payout packet waits for the acknowledgement or the
   deadline. Blackjack deals card by card (`core/game/blackjack/DealClock`, shared by client and
   server) and the server holds the settle until the client has shown the last card.
+* **A finished blackjack hand is swept off the felt** (`ClientBlackjackState` sweep, client only):
+  it stays `SWEEP_HOLD_TICKS` (50) after the result is shown, then slides off to the left in
+  `SWEEP_TICKS` (10), clipped at the felt's edge, and the felt is cleared. A lobby countdown starting
+  (`hurrySweep`) cuts the wait. At a shared table the lobby is only drawn on an empty felt, so before
+  this the ready marks and the countdown never showed after a first hand.
+* **A focused text field keeps every key.** A container screen reads keys as bindings first (E closes,
+  Q drops, digits swap with the hotbar); `UpgraderScreen.keyPressed` hands them to its search field
+  while it is visible and focused, as the creative inventory does. Any new `EditBox` needs the same.
 * **Payouts hand themselves over** at the settle (inventory, then mailbox). Collect only exists for a
   payout parked by a restart or an abandoned table. After a result, the commit button is dead for
   24 ticks so a stray click does not start the next game.

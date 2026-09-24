@@ -1,15 +1,19 @@
 # Item Casino — handoff
 
 **Read this whole file before touching anything.** It is the entry point for a fresh session and
-describes the tree as it stands on **2026-09-17**, after the fixes from `AUDIT-2026-09-17.md`. `README.md` is the short public
-overview; this file is how the project is actually worked on.
+describes the tree as it stands on **2026-09-24**. `README.md` is the public overview of the mod; this
+file is how the project is actually worked on. The dated audits it mentions (`AUDIT-*.md`) are kept
+beside the project on the author's disk, not in the repository.
 
-* Project: `<project folder>` — Minecraft **1.21.11**, NeoForge **21.11.42**,
+* Project: a folder on Rémi's Windows machine (`get_device_info` names it) and the public repository
+  **https://github.com/SVecro/ItemCasino** — Minecraft **1.21.11**, NeoForge **21.11.42**,
   Java **21**, Gradle **9.2.1**, ModDevGradle **2.0.141**, Parchment `2025.12.20`.
-* Mod id `itemcasino`, root package `com.itemcasino`, version `0.1.0`.
-* 164 Java files in `src/main` (201 classes), 16 in `src/test`, 27 registered game tests.
-* **The project is a git repository on Rémi's disk** (since 2026-09-17, first commit = the tree the
-  audit read). Commit there with `device_bash` at the end of each batch (§2.3).
+* Mod id `itemcasino`, root package `com.itemcasino`, `mod_version` `0.3.0` (not yet released).
+* 164 Java files in `src/main` (201 classes), 16 in `src/test`, 28 registered game tests.
+* **The project is a git repository on Rémi's disk** (since 2026-09-17), pushed to GitHub by Rémi
+  himself (§2.4). Commit there with `device_bash` at the end of each batch (§2.3), as
+  `Vecro <193068253+SVecro@users.noreply.github.com>` — the repository's local git config already says
+  so. Never commit with a personal address.
 * **Languages.** Rémi writes in French: **answer him in French.** The **mod itself is English only**
   (his request): `en_us.json` is the only language file loaded. Code, comments, commit-style notes and
   this file stay in English.
@@ -29,7 +33,7 @@ overview; this file is how the project is actually worked on.
    on the device, stage `Claude outputs/offline-src.tgz` and `Claude outputs/offline-jars.tar`, then in
    the sandbox: `mkdir -p ~/ic && cd ~/ic && tar xzf <src.tgz> && bash tools/offline/setup.sh <jars.tar>`
    and `bash tools/offline/check.sh`. Expect **ALL CHECKS PASSED** (201 classes, 0 `[removal]`
-   warnings, JUnit 82/82, CoreSelfTest 158/158, 0 overrides, 0 static problems).
+   warnings, JUnit 88/88, CoreSelfTest 158/158, 0 overrides, 28 game tests paired, 0 static problems).
 5. Compare `bash tools/offline/tree-hash.sh` in the sandbox with the same script on the device. Equal
    means you are working on exactly what is on his disk.
 6. Then ask Rémi what he wants, or propose the top of §9.
@@ -68,17 +72,22 @@ From Rémi's first brief, never relaxed:
   `run/`, `Claude outputs/` and the `.bat` result files). Deleting there needs
   `device_request_delete_permission`, and so does git itself (it unlinks its lock and temp files):
   ask once per session before the first commit; prefer `mv -n` into an archive folder for anything else.
+  Until that permission is granted, even `git status` leaves a stale `.git/index.lock` behind (it
+  cannot unlink it), and the next commit — Rémi's included — fails on it. Read-only git on the device
+  is `git --no-optional-locks …`.
 
 ### 2.2 Building and running: Rémi double-clicks
 
 | Script | Runs | Writes | Status file |
 |---|---|---|---|
-| `run-build.bat` | `gradle build` (includes JUnit); first generates the Gradle wrapper if `gradlew.bat` is missing | `build-errors.txt` | `build-status.txt` → `DONE 0` |
+| `run-build.bat` | `build` (includes JUnit) | `build-errors.txt` | `build-status.txt` → `DONE 0` |
+| `run-gametest.bat` | `build runGameTestServer` | `gametest-out.txt` | `gametest-status.txt` |
+| `run-client.bat` | `runClient` | — (console stays open) | — |
+| `run-release.bat` | `build runGameTestServer`, then the guarded copy into `releases/` (§4) | `release-out.txt` | `release-status.txt` |
 
-| `run-gametest.bat` | `gradle build runGameTestServer` | `gametest-out.txt` (~5 MB) | `gametest-status.txt` |
-| `run-client.bat` | `gradle runClient` | — (console stays open) | — |
-
-All three call `%USERPROFILE%\gradle-dist\gradle-9.2.1\bin\gradle.bat`. `gametest-out.txt` is big: grep
+All of them call the committed wrapper, `gradlew.bat` (Gradle 9.2.1, downloaded once into
+`%USERPROFILE%\.gradle\wrapper`). Since 2026-09-24 the same build also runs on GitHub Actions for every
+push (§2.4), which can save Rémi a round trip. `gametest-out.txt` is big: grep
 it with `device_bash` (`grep -a "required tests"`, `grep -a "itemcasino gametest:"` for a failure
 message), never read it whole. Crashes land in `run\crash-reports\`, the live log is
 `run\logs\latest.log`; read **both** (§8.1 is a crash report that lied).
@@ -113,6 +122,34 @@ result with `device_bash`.**
   attribution lines the session gives. The first commit of a batch is the rollback point Rémi can
   return to.
 
+### 2.4 GitHub
+
+* The repository is public: **https://github.com/SVecro/ItemCasino**, default branch `main`.
+  **Rémi pushes, from Windows.** Neither the sandbox nor the VM holds GitHub credentials, and a session
+  never types a token. Prepare the commits on the device, then tell him what to push (`git push`, and
+  `git push origin vX.Y.Z` for a release tag).
+* The VM reaches `github.com` and `api.github.com` through its proxy, so reading works (`git ls-remote`,
+  the REST API without authentication, 60 requests an hour). `uploads.github.com` is refused, so release
+  jars are attached on the web page, not through the API.
+* **CI**: `.github/workflows/build.yml` runs `./gradlew build`, then `./gradlew runGameTestServer`, on
+  every push and every pull request (Ubuntu, Temurin 21, `gradle/actions/setup-gradle` caching the
+  Gradle home, which includes the decompiled Minecraft and the game assets). NeoForge's `GameTestServer`
+  exits with the number of failed required tests, so one failing test fails the job, and under GitHub
+  Actions it prints a `::error title=GameTest Failure::` annotation that names them. A red job uploads
+  `run/logs` and `run/crash-reports` as an artifact; a green one uploads the jar.
+* Reading CI without Rémi, from the VM: `curl -s "https://api.github.com/repos/SVecro/ItemCasino/actions/runs?per_page=1"`
+  for the status of the last run, and `/repos/SVecro/ItemCasino/check-runs/<job id>/annotations` for the
+  names of failed tests. Job logs and artifacts need authentication. *(To be confirmed on the first
+  red run.)*
+* **A release**: `mod_version` bumped, `run-release.bat` green, a `CHANGELOG.md` section, commit, tag
+  `vX.Y.Z` on that commit, Rémi pushes the branch and the tag, then creates the release from the tag on
+  github.com and attaches `releases/itemcasino-X.Y.Z.jar` and its `.sha256`.
+* **The history was rewritten once**, on 2026-09-24, before anything was pushed: a personal e-mail
+  address replaced by the noreply one, the private notes and a stray 560 KB log taken out of every
+  commit, `gradlew` made executable in every commit. The history as it was before is kept in
+  `backup/history-before-rewrite-2026-09-24.bundle` on Rémi's disk (git-ignored). Now that the
+  repository is public, **never rewrite published history again.**
+
 ---
 ## 3. What the mod is today
 
@@ -121,16 +158,16 @@ marked *(not yet seen in game)* has been played by Rémi in `runClient`.
 
 ### 3.1 The tables
 
-| Block (id) | Recipe | Stake | Return to player | What it does |
+| Block (id) | Signature item (recipe in §3.4) | Stake | Return to player | What it does |
 |---|---|---|---|---|
-| Upgrader (`upgrader`) | 4 diamonds, 4 gold, anvil | items or chips | 90 % | Pick a target item; a wheel spins at `0.9 × stake / target` odds; win pays the target. Shots longer than 1 in 1000 are refused. |
-| Predict the Dice (`predict_the_dice`) | redstone blocks, gold, ender eye | **chips only** | 97 % (`dice.edge_ppm`) | Roll 0.00–99.99; pick a chance 1–95 % and under/over. Win cap `dice.max_payout_chips` 250 000, so long shots allow a smaller bet. Old Double or Nothing ids are aliased to it. |
-| Blackjack (`blackjack_table`) | green wool, gold, book, planks | items or chips | ~99.4 % basic strategy | One deck, S17, double, late surrender, peek, 3:2. Double takes a second identical stack, or twice the chips on the same card. |
-| Coin Flip (`coin_flip`) | iron blocks, gold, ender eye | items or chips (both players the same kind) | 100 % for each player (PvP) | Two chairs, stakes within 10 % of each other, winner takes both. The coin is **weighted by the stakes** (`core/game/DuelOdds`): each chair's chance is its share of the pot, shown next to its stake. |
-| Slot Machine (`slot_machine`) | quartz block, ender eye, redstone block, iron, gold | items (takes up to 16 of a stack, the rest stays in the slot) or chips (≤ 320) | 90.0 % (enumerated) | Three reels, triples up to ×800, pairs from Iron up. Rules in the (i). |
-| Mine Field (`mine_field`) | TNT, pressure plate, iron, gold, redstone | **chips only** | 97 % whatever the strategy | 5×5, 1–24 mines, multiplier cap ×250, win ceiling `mine_field.max_payout_chips` 250 000: the stake may be anything whose first tile fits, and a board cashes itself out when the next tile would pass the ceiling. Never forfeits on timeout/restart: cashes out. |
-| The Vault (`vault`) | nether star, gold blocks, obsidian | items or chips | 80 % of the offering | Choose a share of the shared pot (1–100 %); odds priced so a draw is worth 80 % of the offering whatever the share; 50 % ceiling per draw; only 50 % of the offering goes into the pot (`jackpot.draw_pot_share_ppm`), the rest is destroyed. Smallest offering 10 points (`jackpot.draw_min_value`). Refuses component-driven items (potions, enchanted books…). |
-| Cashier (`cashier`) | gold, emerald, iron around a chest | — | 98 % round trip | **Currencies only** → chips at full value: the tag `itemcasino:cashier_accepts` (diamonds, emeralds, gold, iron, copper: ingots, nuggets, blocks); everything else is played at the tables. Chips → up to 8 currencies at value + 2 % (`chips.withdraw_fee_ppm`, `chips.currencies`). Refused in creative when `allow_creative` is off. |
+| Upgrader (`upgrader`) | smithing table | items or chips | 90 % | Pick a target item; a wheel spins at `0.9 × stake / target` odds; win pays the target. Shots longer than 1 in 1000 are refused. |
+| Predict the Dice (`predict_the_dice`) | quartz block | **chips only** | 97 % (`dice.edge_ppm`) | Roll 0.00–99.99; pick a chance 1–95 % and under/over. Win cap `dice.max_payout_chips` 250 000, so long shots allow a smaller bet. Old Double or Nothing ids are aliased to it. |
+| Blackjack (`blackjack_table`) | book | items or chips | ~99.4 % basic strategy | One deck, S17, double, late surrender, peek, 3:2. Double takes a second identical stack, or twice the chips on the same card. |
+| Coin Flip (`coin_flip`) | gold ingot | items or chips (both players the same kind) | 100 % for each player (PvP) | Two chairs, stakes within 10 % of each other, winner takes both. The coin is **weighted by the stakes** (`core/game/DuelOdds`): each chair's chance is its share of the pot, shown next to its stake. |
+| Slot Machine (`slot_machine`) | lever | items (takes up to 16 of a stack, the rest stays in the slot) or chips (≤ 320) | 90.0 % (enumerated) | Three reels, triples up to ×800, pairs from Iron up. Rules in the (i). |
+| Mine Field (`mine_field`) | TNT | **chips only** | 97 % whatever the strategy | 5×5, 1–24 mines, multiplier cap ×250, win ceiling `mine_field.max_payout_chips` 250 000: the stake may be anything whose first tile fits, and a board cashes itself out when the next tile would pass the ceiling. Never forfeits on timeout/restart: cashes out. |
+| The Vault (`vault`) | nether star | items or chips | 80 % of the offering | Choose a share of the shared pot (1–100 %); odds priced so a draw is worth 80 % of the offering whatever the share; 50 % ceiling per draw; only 50 % of the offering goes into the pot (`jackpot.draw_pot_share_ppm`), the rest is destroyed. Smallest offering 10 points (`jackpot.draw_min_value`). Refuses component-driven items (potions, enchanted books…). |
+| Cashier (`cashier`) | emerald | — | 98 % round trip | **Currencies only** → chips at full value: the tag `itemcasino:cashier_accepts` (diamonds, emeralds, gold, iron, copper: ingots, nuggets, blocks); everything else is played at the tables. Chips → up to 8 currencies at value + 2 % (`chips.withdraw_fee_ppm`, `chips.currencies`). Refused in creative when `allow_creative` is off. |
 
 
 ### 3.2 Chips and the chip card
@@ -207,16 +244,22 @@ banked, since a draw would sell their hidden worth at the bare item's price.
 
 ## 4. Verification status and recent history
 
-**Last Gradle run: `run-gametest.bat` on 2026-09-17 at 22:37 — build OK, "All 27 required tests passed"**
-(27, one fewer than 0.1.0: Gil's test is gone). No `derivation cycle` warning, no data errors, values
-ready in 34 ms (1517 items, 0 unpriced, 1482 recipes, 12 skipped). That run covers the whole 09-17 late
-batch. The jar was opened before release: `game_core` blockstate/models/texture/loot table/recipe
-present, 12 recipes and 12 recipe advancements, no goblin class or asset, 211 lang keys, `version =
-"0.2.0"`.
+**Last Gradle run: `run-gametest.bat` on 2026-09-24 at 14:10 — build OK, "All 29 required tests passed"**
+on the lobby commit. **The log always counts one more than we register**: vanilla adds its own
+`minecraft:always_pass` test instance (`BuiltinTestFunctions`), so 28 of ours read as 29 (27 read as 28
+at 0.3.0's first build, 26 as 27 at 0.2.0).
+
+The tree has changed since, but not its Java: the publication batch of 2026-09-24 (README, CHANGELOG,
+metadata, `logo.png`, `.gitattributes`, the `.bat` files on the wrapper, CI) passed `check.sh` and
+waits for its first Gradle run — on CI or by `.bat`.
 
 **Released: 0.2.0** — git tag `v0.2.0`, jar in `releases/itemcasino-0.2.0.jar`
 (`b15f13bf5b4be514f32ab29aab67204ff97909b7665c268ed87a547166551cb1`) with its `.sha256`. 0.1.0 is still
 beside it. `releases/` is git-ignored.
+
+**`releases/itemcasino-0.3.0.jar` (2026-09-18, `5d23afe5…`) is stale — never ship it.** It was built
+before the seat-0 money fix (checked in its bytecode: no `wagerOwner = seatId(0)`) and before the lobby
+(27 test instances). The real 0.3.0 comes from the next `run-release.bat`, which overwrites it.
 
 **Releasing is one `.bat` now.** Bump `mod_version` in `gradle.properties`, then `run-release.bat`:
 it builds, runs the game tests, and copies `build/libs/itemcasino-<version>.jar` into `releases/`
@@ -232,6 +275,15 @@ delivery and the 24-tick button lock, the (i) badges in the top-right corner, th
 the chip-card hints (tables and Cashier), the game in English on a French client.
 
 **Network version 7** — the two blackjack payloads changed shape to carry every chair.
+
+### The lobby at a shared table (09-24)
+
+At a table with more than one chair the button says **Ready**, not Deal. The first Ready starts a
+countdown (`blackjack.ready_seconds`, 20 by default, 5–300); the hand is dealt when every chair with a
+bet down is ready, or when the countdown runs out, to whoever is ready by then. A silent chair sits
+the hand out with its bet still in its box. Ready again, changing the box, or closing the screen
+withdraws the word; everything resets after each hand. The countdown runs on the server. Game test:
+`lobby_waits_for_every_bet`. *(Not yet seen in game.)*
 
 ### Blackjack seats three
 
@@ -268,6 +320,16 @@ path it always did. One shoe, one dealer, chairs act in turn.
 
 History, newest first (the details live in the code comments and in §8):
 
+* **09-24** — the lobby (above). Then the publication batch: public README, `CHANGELOG.md`,
+  `.gitattributes` and `gradlew` made executable, the `.bat` files on `gradlew.bat`, mod metadata
+  (`displayURL`, `issueTrackerURL`, `logoFile`, author Vecro), GitHub Actions, history rewritten before
+  the first push (§2.4). The audits and the session prompts left the repository.
+* **09-18, later** — seat 0's money follows seat 0: at a shared table whoever pressed Deal was
+  `wagerOwner` and collected seat 0's payout and refund (reported from the table: the loser of a push
+  collected the winner's stake). `three_seats_settle_apart` now deals from the last chair, which is
+  what would have caught it. A game test that failed one run in eleven for its own reasons was fixed.
+  `run-release.bat` added.
+
 * **09-18** — blackjack seats three (above). Groundwork: `Seat`, the per-seat money twins in
   `CasinoSession`, `broadcastPerPlayer`, the three betting boxes, `SeatHand` on the wire, network
   version 7. New: 6 JUnit tests for the multi-hand table and the `three_seats_settle_apart` game
@@ -284,7 +346,7 @@ History, newest first (the details live in the code comments and in §8):
   the entity, its summon, renderer, texture, loot table, entity registry, `[goblin]` config section
   and its game test. 198 classes, 26 game tests, 82 JUnit, 0 `[removal]` warnings.
 
-* **09-17** — full audit (`AUDIT-2026-09-17.md`) and its fixes. Rémi's decisions: ambient jackpot
+* **09-17** — full audit (`AUDIT-2026-09-17.md`, kept privately) and its fixes. Rémi's decisions: ambient jackpot
   **removed**; Cashier takes **currencies only**; duel coin **weighted by the stakes**; Upgrader
   targets **unrestricted** (tag `not_a_target` created empty). Fixes: items lost when a pocket game or
   Gil closed onto a dead or disconnecting player; duel restored mid-flip returned seat B's stake twice;
@@ -308,7 +370,7 @@ History, newest first (the details live in the code comments and in §8):
 * **09-16 afternoon** — chips: card, Cashier, bet column, chips-only Dice and Mine Field, chip duels,
   chips in the pot; Mine Field win ceiling. Game tests 23/23.
 * **09-16 morning** — Predict the Dice replaced Double or Nothing (aliases for old worlds); Vault
-  share slider and hold-to-repeat steppers; player-perspective audit (`AUDIT-JOUEUR-2026-09-16.md`).
+  share slider and hold-to-repeat steppers; player-perspective audit (`AUDIT-JOUEUR-2026-09-16.md`, kept privately).
 * **09-15** — Mine Field; Vault share of the pot; the audit fixes (duel pot theft, table breaking,
   blackjack restart refund, Upgrader long shots, slot payout packets, estimated item values, stats,
   mailbox).
@@ -456,7 +518,8 @@ reads 0 until it is public.
   ceiling on withdrawal cost), `registry/CasinoDataComponents` (`itemcasino:chips`).
 * `client/render/ValueStepper` — hold-to-repeat, wheel and drag for any number a screen sets, sending
   at most every 3 ticks.
-* `network/CasinoNetwork.VERSION = "6"` — bump it whenever a payload changes shape (09-17 changed none).
+* `network/CasinoNetwork.VERSION = "7"` — bump it whenever a payload changes shape (09-18 did: the
+  blackjack payloads carry every chair).
 * `ItemCasino.AUDIT` (logger `ItemCasino/Audit`) — every `[wager]`, `[settle]`, `[cashier]`,
   `[jackpot]` and `[mailbox]` line, so a server can route or silence them apart from the mod's warnings.
 * `session/CasinoRandom` — the `RandomSource` every outcome is drawn from (`SessionHost.random()`), a
@@ -802,12 +865,20 @@ with it everything drawn next in that tick (a mine field's layout). Outcomes now
 
 ## 9. Open items, in the order worth doing them
 
+0. **The new-world disconnect.** Reported: creating a new world disconnects the client with
+   `Failed to decode packet 'clientbound/minecraft:custom_payload'`; joining it again works. Nobody has
+   read the trace. What is known (2026-09-24): no log kept in `run/logs` (09-13 → 09-24) contains it, so
+   it was probably seen in another instance; the only payload of ours sent on joining is
+   `itemcasino:value_table` (at `OnDatapackSyncEvent`, play phase), and its codec round-trips 1 517
+   entries, extreme values and an empty table exactly, with no bytes left over. Get the full
+   `latest.log` of a run that shows it before releasing — its "Caused by" names the payload.
 1. **`run-client.bat`** (the game tests already passed). What to look at in game: a blackjack hand closed and reopened mid-hand (the cards come back); a duel with two unequal
    stakes (each chair shows its chance); the Cashier refusing cobblestone (and its (i)); a slot machine
    given a full stack (takes 16, says so, re-arms); Shift over any item (casino value); the item
    tooltips of the tables; a Game Core crafted and then a table built around it; the recipe book showing
    the tables; the log with no `derivation cycle` warning. Plus the 09-16 list in §4.
-2. **Add a private remote** to the git repository (the Gradle wrapper is committed since 0.1.0).
+2. **Screenshots for the README** (Rémi takes them with F2 in `run-client`; they land in
+   `run/screenshots`).
 3. **Design questions still open**: should losses bank 100 % into the pot, now that the Vault destroys
    half of each offering and the ambient jackpot is gone? Iron farms and villager emeralds still convert
    to diamonds at the Cashier (their base values: iron ≈ 13, emerald 96). A pocket slot machine was

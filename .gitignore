@@ -14,6 +14,8 @@ build-errors.txt
 build-status.txt
 gametest-out.txt
 gametest-status.txt
+release-out.txt
+release-status.txt
 
 # Working files of the offline toolkit and of Claude sessions
 .offline/

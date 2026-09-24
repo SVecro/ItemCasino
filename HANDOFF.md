@@ -138,9 +138,11 @@ result with `device_bash`.**
   Actions it prints a `::error title=GameTest Failure::` annotation that names them. A red job uploads
   `run/logs` and `run/crash-reports` as an artifact; a green one uploads the jar.
 * Reading CI without Rémi, from the VM: `curl -s "https://api.github.com/repos/SVecro/ItemCasino/actions/runs?per_page=1"`
-  for the status of the last run, and `/repos/SVecro/ItemCasino/check-runs/<job id>/annotations` for the
-  names of failed tests. Job logs and artifacts need authentication. *(To be confirmed on the first
-  red run.)*
+  for the status of the last run, `/actions/runs/<run id>/jobs` for every step with its times, and
+  `/repos/SVecro/ItemCasino/check-runs/<job id>/annotations` for the names of failed tests (NeoForge
+  writes that annotation). Checked on 2026-09-24 without authentication: those three answer; the job
+  log and the artifact downloads answer 403. Ask from the VM: the sandbox's own proxy refuses
+  `api.github.com` for this repository unless it has been attached to the session.
 * **A release**: `mod_version` bumped, `run-release.bat` green, a `CHANGELOG.md` section, commit, tag
   `vX.Y.Z` on that commit, Rémi pushes the branch and the tag, then creates the release from the tag on
   github.com and attaches `releases/itemcasino-X.Y.Z.jar` and its `.sha256`.
@@ -249,9 +251,10 @@ on the lobby commit. **The log always counts one more than we register**: vanill
 `minecraft:always_pass` test instance (`BuiltinTestFunctions`), so 28 of ours read as 29 (27 read as 28
 at 0.3.0's first build, 26 as 27 at 0.2.0).
 
-The tree has changed since, but not its Java: the publication batch of 2026-09-24 (README, CHANGELOG,
-metadata, `logo.png`, `.gitattributes`, the `.bat` files on the wrapper, CI) passed `check.sh` and
-waits for its first Gradle run — on CI or by `.bat`.
+**First CI run: 2026-09-24 at 16:27 UTC, on `e6cf533` (the publication batch) — green.** Wrapper
+validated; `build` with JUnit in 1 min 36 s from a cold cache, Minecraft decompiled included;
+`runGameTestServer` in 27 s; 2 min 23 s in all; jar artifact 632 KB. GitHub notes that `ubuntu-latest`
+moves to Ubuntu 26 from 2026-10-19: if a run breaks after that date, pin `runs-on: ubuntu-24.04`.
 
 **Released: 0.2.0** — git tag `v0.2.0`, jar in `releases/itemcasino-0.2.0.jar`
 (`b15f13bf5b4be514f32ab29aab67204ff97909b7665c268ed87a547166551cb1`) with its `.sha256`. 0.1.0 is still

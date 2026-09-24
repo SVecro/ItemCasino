@@ -59,6 +59,7 @@
   "block.itemcasino.coin_flip": "Coin Flip Table",
   "container.itemcasino.coin_flip": "Coin Flip",
   "itemcasino.button.ready": "Ready",
+  "itemcasino.button.not_ready": "Cancel",
   "itemcasino.label.seat_red": "Red seat",
   "itemcasino.label.seat_blue": "Blue seat",
   "itemcasino.label.them": "Rival",

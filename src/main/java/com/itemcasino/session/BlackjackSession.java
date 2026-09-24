@@ -24,6 +24,7 @@ import com.itemcasino.valuation.ValuationEngine;
 import com.itemcasino.valuation.ValuationSnapshot;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Inventory;
@@ -66,6 +67,11 @@ public class BlackjackSession extends CasinoSession {
     private final boolean[] ready;
     /** When the countdown that started at the first "ready" runs out; 0 when none is running. */
     private long readyDeadlineTick;
+    /**
+     * What each ready chair had in its box when it said so. Ready vouches for that stake and no
+     * other: any change to the box, or to the chip bet, withdraws it.
+     */
+    private final ItemStack[] vouchedFor;
 
     /** The shoe's seed; 0 when no hand is in flight. Server-side only, never sent to a client. */
     private long handSeed;
@@ -103,6 +109,8 @@ public class BlackjackSession extends CasinoSession {
         java.util.Arrays.fill(this.doubleEscrow, ItemStack.EMPTY);
         this.doubledChips = new boolean[seats()];
         this.ready = new boolean[seats()];
+        this.vouchedFor = new ItemStack[seats()];
+        java.util.Arrays.fill(this.vouchedFor, ItemStack.EMPTY);
     }
 
     /**
@@ -201,15 +209,27 @@ public class BlackjackSession extends CasinoSession {
         if (state == GameState.LOCKED || state == GameState.ROLLING) return;
         boolean anyone = false;
         for (int index = 0; index < seats(); index++) {
-            // Changing what is in a box withdraws that chair's word that it was ready to play it.
-            if (slotStackOf(index).isEmpty()) ready[index] = false;
-            else anyone = true;
+            // Changing what is in a box -- emptying it, or swapping or topping up the stack --
+            // withdraws that chair's word that it was ready to play it: Ready vouched for what was
+            // there, and the new stake has not been checked.
+            if (ready[index] && !ItemStack.matches(slotStackOf(index), vouchedFor[index])) {
+                ready[index] = false;
+            }
+            if (!slotStackOf(index).isEmpty()) anyone = true;
         }
-        if (!anyone) {
-            java.util.Arrays.fill(ready, false);
-            readyDeadlineTick = 0;
-        }
+        if (!anyone) java.util.Arrays.fill(ready, false);
+        if (!anyReady()) readyDeadlineTick = 0;
         setState(anyone ? GameState.ARMED : GameState.IDLE);
+    }
+
+    /** A new chip bet is a new stake, so it withdraws the chair's Ready just as a new box does. */
+    @Override
+    protected void storeBet(int seat, long chips) {
+        super.storeBet(seat, chips);
+        if (seat >= 0 && seat < ready.length && ready[seat] && state.acceptsItems()) {
+            ready[seat] = false;
+            if (!anyReady()) readyDeadlineTick = 0;
+        }
     }
 
     /**
@@ -324,19 +344,62 @@ public class BlackjackSession extends CasinoSession {
         if (!checkStakeAt(player, index, snapshot)) return false;
 
         ready[index] = !ready[index];
+        vouchedFor[index] = ready[index] ? slotStackOf(index).copy() : ItemStack.EMPTY;
         host.markDirty();
         touch();
         // Alone at the table there is nobody to wait for: the button deals, as it does at one chair.
         if (ready[index] && Integer.bitCount(presentMask() & ~(1 << index)) == 0) {
-            return startHand(player, readySeats(), snapshot);
+            dealReady(player, snapshot);
+            return true;
         }
         if (ready[index] && readyDeadlineTick == 0) {
             readyDeadlineTick = host.hostLevel().getGameTime()
                     + CasinoConfig.SERVER.lobbySeconds.get() * 20L;
         }
         if (!anyReady()) readyDeadlineTick = 0;
-        if (everyoneLookingIsReady()) return startHand(player, readySeats(), snapshot);
+        if (everyoneLookingIsReady()) dealReady(player, snapshot);
         return true;
+    }
+
+    /**
+     * Deals the chairs that are ready -- after checking each of their stakes again, now.
+     *
+     * <p>Ready was checked when it was pressed, and a stake can still change before the cards come
+     * out, so every box is asked the same question {@link #placeWager} asks: blacklisted, unpriced,
+     * too cheap, a card under one chip. A chair whose box no longer passes sits this hand out, its
+     * player is told why, and the others play. Nobody is dealt in on a stake nobody checked.
+     */
+    private boolean dealReady(@Nullable ServerPlayer initiator, ValuationSnapshot snapshot) {
+        boolean[] playing = readySeats();
+        boolean any = false;
+        for (int index = 0; index < playing.length; index++) {
+            if (!playing[index]) continue;
+            if (acceptableStake(index, snapshot)) {
+                any = true;
+                continue;
+            }
+            playing[index] = false;
+            ready[index] = false;
+            ServerPlayer sitting = host.seatedPlayer(index);
+            if (sitting != null) {
+                sitting.displayClientMessage(Component.translatable(rejectionKey(index, snapshot)), true);
+            }
+        }
+        if (!any) {
+            if (!anyReady()) readyDeadlineTick = 0;
+            host.markDirty();
+            return false;
+        }
+        return startHand(initiator, playing, snapshot);
+    }
+
+    /** Why a chair's box would be refused, for the message its player is shown. */
+    private String rejectionKey(int index, ValuationSnapshot snapshot) {
+        ItemStack stack = slotStackOf(index);
+        if (stack.isEmpty()) return "itemcasino.reject.no_stake";
+        if (ChipCards.isCard(stack)) return "itemcasino.reject.no_chips";
+        StackValuator.Rejection rejection = StackValuator.reject(stack, snapshot);
+        return rejection == null ? "itemcasino.reject.no_stake" : rejection.translationKey();
     }
 
     private boolean anyReady() {
@@ -405,13 +468,31 @@ public class BlackjackSession extends CasinoSession {
      */
     @Override
     public void tick() {
+        // A restore settles the other chairs while the table has no world to hand anything over in:
+        // what they are owed waits in their own saved buffers and goes out here, on the first tick
+        // that can deliver it. Outside a hand no chair beyond the first holds a payout otherwise --
+        // a live settle hands them over on the spot.
+        if (!state.holdsEscrow()) {
+            for (int index = 1; index < seats(); index++) {
+                Seat chair = seat(index);
+                if (chair != null && chair.hasPayout()) handOverSeat(index);
+            }
+        }
+        if (seats() > 1 && state == GameState.ARMED && readyDeadlineTick > 0
+                && CasinoConfig.isGameDisabled(gameType())) {
+            // Switched off by the server while a countdown ran: nobody is dealt in, and every box
+            // keeps its stake.
+            java.util.Arrays.fill(ready, false);
+            readyDeadlineTick = 0;
+            host.markDirty();
+        }
         if (seats() > 1 && state == GameState.ARMED && readyDeadlineTick > 0
                 && (host.hostLevel().getGameTime() >= readyDeadlineTick || everyoneLookingIsReady())) {
             boolean[] playing = readySeats();
             readyDeadlineTick = 0;
             boolean any = false;
             for (boolean p : playing) if (p) { any = true; break; }
-            if (any) startHand(null, playing, ValuationEngine.snapshot());
+            if (any) dealReady(null, ValuationEngine.snapshot());
             else java.util.Arrays.fill(ready, false);
             host.markDirty();
         }
@@ -837,6 +918,7 @@ public class BlackjackSession extends CasinoSession {
         }
         super.repairAfterLoad();
         if (!state.holdsEscrow()) {
+            captureSeatBookkeeping();
             // The base repair empties seat 0's escrow but knows nothing of the double-down
             // collateral, nor of the other chairs. Left set, they were handed back a second time
             // when the table was broken.
@@ -844,13 +926,64 @@ public class BlackjackSession extends CasinoSession {
                 doubleEscrow[index] = ItemStack.EMPTY;
                 doubledChips[index] = false;
             }
-            for (int index = 1; index < seats(); index++) {
-                setEscrowOf(index, ItemStack.EMPTY);
-                handOverSeat(index);
-            }
+            // What the other chairs are owed stays in their own buffers, which are saved with the
+            // table. It is NOT handed over here: a block entity is loaded before the chunk gives it
+            // a level, so there is no server to reach a mailbox and no world to drop anything in --
+            // handing it over here is how a restored shared hand lost chairs two and three's
+            // winnings. The first tick delivers it (see tick()).
+            for (int index = 1; index < seats(); index++) setEscrowOf(index, ItemStack.EMPTY);
         }
         table = null;
         clearHandRecord();
+    }
+
+    /**
+     * The stats and the pot for the chairs beyond the first, after a restore. The base class books
+     * seat 0; the others were settled by the same repair and are owed the same bookkeeping, taken
+     * down now, while their stakes are still known, and run on the first tick that has a level and
+     * item values.
+     */
+    private void captureSeatBookkeeping() {
+        List<java.util.function.Consumer<ServerLevel>> chairs = new ArrayList<>();
+        final boolean bank = banksLosses();
+        for (int index = 1; index < seats(); index++) {
+            ItemStack chairEscrow = escrowOf(index);
+            if (chairEscrow.isEmpty()) continue;
+            final java.util.UUID owner = ownerOfSeat(index);
+            final boolean chips = stakeCentsOf(index) > 0 && ChipCards.isCard(chairEscrow);
+            final ItemStack prototype = chairEscrow.copyWithCount(1);
+            final long count = stakedItemCountAt(index);
+            final long stakedCents = chips ? committedStakeCents(index) : 0L;
+            final long paidCents = chips ? chipPayoutOf(index) : 0L;
+            final List<ItemStack> paid = new ArrayList<>();
+            for (ItemStack stack : payoutOf(index)) if (!ChipCards.isCard(stack)) paid.add(stack.copy());
+            chairs.add(level -> {
+                long unit = com.itemcasino.valuation.StackValuator.unitValue(prototype, ValuationEngine.snapshot());
+                long staked = chips ? Chips.valueOfCents(stakedCents)
+                        : unit == Fixed.INF ? 0L : Fixed.mul(unit, count);
+                long returned = Fixed.add(valueOf(paid), Chips.valueOfCents(paidCents));
+                if (owner != null) {
+                    com.itemcasino.player.CasinoStats.recordWager(level.getServer(), owner, gameType(),
+                            staked, returned);
+                }
+                if (!bank) return;
+                if (chips) {
+                    com.itemcasino.jackpot.Jackpot.bankChips(level, stakedCents - paidCents);
+                } else {
+                    long paidBack = 0;
+                    for (ItemStack stack : paid) {
+                        if (ItemStack.isSameItemSameComponents(stack, prototype)) paidBack += stack.getCount();
+                    }
+                    com.itemcasino.jackpot.Jackpot.bank(level, prototype, count - paidBack);
+                }
+            });
+        }
+        if (chairs.isEmpty()) return;
+        final java.util.function.Consumer<ServerLevel> first = restoredBookkeeping;
+        restoredBookkeeping = level -> {
+            if (first != null) first.accept(level);
+            for (java.util.function.Consumer<ServerLevel> chair : chairs) chair.accept(level);
+        };
     }
 
     @Override

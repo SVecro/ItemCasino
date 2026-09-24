@@ -136,6 +136,12 @@ public final class ServerHandlers {
             // Dealing is part of committing now: a hand starts when the bets are down, and every
             // box with a stake in it is dealt in. The separate deal packet stays for the clients
             // that send it, and simply commits.
+            // It commits, so it answers to the same switch as the wager packet: without this a
+            // modified client could keep dealing at a table the server had turned off.
+            if (com.itemcasino.CasinoConfig.isGameDisabled(ctx.session().gameType())) {
+                ctx.player().displayClientMessage(Component.translatable("itemcasino.reject.game_disabled"), true);
+                return;
+            }
             if (ctx.session() instanceof BlackjackSession blackjack) blackjack.commitWager(ctx.player());
         }), "blackjack_deal");
     }

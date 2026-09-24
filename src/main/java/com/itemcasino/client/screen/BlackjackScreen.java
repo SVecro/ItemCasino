@@ -74,8 +74,12 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
         // what is in your box: the dealer deals when everyone looking has said so, or when the
         // countdown runs out. Alone, it deals, as it always has.
         if (menu.seatCount() <= 1) return "itemcasino.button.deal";
-        int others = menu.readout(BlackjackSession.READOUT_PRESENT) & ~(1 << menu.seatIndex());
-        return others != 0 ? "itemcasino.button.ready" : "itemcasino.button.deal";
+        int own = menu.seatIndex();
+        int others = menu.readout(BlackjackSession.READOUT_PRESENT) & ~(1 << own);
+        if (others == 0) return "itemcasino.button.deal";
+        // Once your chair is ready, the same button takes it back, and says so.
+        boolean mineReady = own >= 0 && (menu.readout(BlackjackSession.READOUT_READY) & (1 << own)) != 0;
+        return mineReady ? "itemcasino.button.not_ready" : "itemcasino.button.ready";
     }
 
     @Override

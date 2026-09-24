@@ -9,7 +9,7 @@ beside the project on the author's disk, not in the repository.
   **https://github.com/SVecro/ItemCasino** — Minecraft **1.21.11**, NeoForge **21.11.42**,
   Java **21**, Gradle **9.2.1**, ModDevGradle **2.0.141**, Parchment `2025.12.20`.
 * Mod id `itemcasino`, root package `com.itemcasino`, `mod_version` `0.3.0` (not yet released).
-* 164 Java files in `src/main` (201 classes), 16 in `src/test`, 30 registered game tests.
+* 164 Java files in `src/main` (201 classes), 16 in `src/test`, 33 registered game tests.
 * **The project is a git repository on Rémi's disk** (since 2026-09-17), pushed to GitHub by Rémi
   himself (§2.4). Commit there with `device_bash` at the end of each batch (§2.3), as
   `Vecro <193068253+SVecro@users.noreply.github.com>` — the repository's local git config already says
@@ -33,7 +33,7 @@ beside the project on the author's disk, not in the repository.
    on the device, stage `Claude outputs/offline-src.tgz` and `Claude outputs/offline-jars.tar`, then in
    the sandbox: `mkdir -p ~/ic && cd ~/ic && tar xzf <src.tgz> && bash tools/offline/setup.sh <jars.tar>`
    and `bash tools/offline/check.sh`. Expect **ALL CHECKS PASSED** (201 classes, 0 `[removal]`
-   warnings, JUnit 88/88, CoreSelfTest 158/158, 0 overrides, 30 game tests paired, 0 static problems).
+   warnings, JUnit 88/88, CoreSelfTest 158/158, 0 overrides, 33 game tests paired, 0 static problems).
 5. Compare `bash tools/offline/tree-hash.sh` in the sandbox with the same script on the device. Equal
    means you are working on exactly what is on his disk.
 6. Then ask Rémi what he wants, or propose the top of §9.
@@ -268,9 +268,10 @@ moves to Ubuntu 26 from 2026-10-19: if a run breaks after that date, pin `runs-o
 (`b15f13bf5b4be514f32ab29aab67204ff97909b7665c268ed87a547166551cb1`) with its `.sha256`. 0.1.0 is still
 beside it. `releases/` is git-ignored.
 
-**`releases/itemcasino-0.3.0.jar` (2026-09-18, `5d23afe5…`) is stale — never ship it.** It was built
-before the seat-0 money fix (checked in its bytecode: no `wagerOwner = seatId(0)`) and before the lobby
-(27 test instances). The real 0.3.0 comes from the next `run-release.bat`, which overwrites it.
+**`releases/itemcasino-0.3.0.jar` is not the release yet.** Rémi rebuilt it on 2026-09-24 at 19:35 from
+`7cec03b` (`88c076c9…`, 30 test instances, lobby and Upgrader search in): it has no sweep and it still
+carries the restore bug of the 09-24 audit (§8.25). The 0.3.0 that ships comes from `run-release.bat`
+after those commits, once the new behaviour has been seen in game; it overwrites this one.
 
 **Releasing is one `.bat` now.** Bump `mod_version` in `gradle.properties`, then `run-release.bat`:
 it builds, runs the game tests, and copies `build/libs/itemcasino-<version>.jar` into `releases/`
@@ -302,8 +303,14 @@ everyone plays at once, the dealer plays when all have stood — he chose to **k
   out as soon as **everyone looking** is ready — a player looking without a bet holds them back until
   the countdown ends, since that is their time to bet — or when it runs out, to whoever is ready.
   `tick()` re-checks this every tick, so the last undecided player walking away deals at once.
-* Ready again, emptying the box, or closing the screen withdraws the word (changing the stack in the
-  box does not); a countdown with nobody ready left is cleared. Everything resets after each hand.
+* Ready vouches for the stake that was in the box (`vouchedFor`): Ready again, **any** change to the
+  box (emptying, swapping, topping up), a new chip bet, or closing the screen withdraws the word; a
+  countdown with nobody ready left is cleared. Everything resets after each hand. Once your chair is
+  ready the button reads **Cancel**.
+* **Every stake is checked again when the cards come out** (`dealReady`), with the question
+  `placeWager` asks (blacklist, unpriced, too cheap, a card under one chip). A chair that fails sits the
+  hand out, keeps its box and is told why; the others play (§8.26). A game switched off in
+  `safety.disabled_games` while a countdown runs cancels it.
 * **Clock per decision**: `blackjack.shared_action_seconds` (15) when two or more chairs were dealt in,
   `blackjack.player_action_seconds` (60) for a hand played alone — `decisionSeconds()`.
 * The old key `ready_seconds` was renamed `lobby_seconds` on purpose: a config file already written
@@ -354,7 +361,13 @@ History, newest first (the details live in the code comments and in §8):
   (`displayURL`, `issueTrackerURL`, `logoFile`, author Vecro), GitHub Actions, history rewritten before
   the first push (§2.4). The audits and the session prompts left the repository. First CI run green.
   Then the lobby reworked (above): alone deals at once, 10 s when two or more are looking, early deal
-  when everyone looking is ready, 15 s per decision in a shared hand; two more game tests (30).
+  when everyone looking is ready, 15 s per decision in a shared hand; two more game tests (30). The
+  sweep of a finished hand (§3.5). Then an audit (`AUDIT-2026-09-24.md`, private) and all its fixes:
+  a restored shared hand lost chairs two and three's winnings (§8.25); the lobby dealt stakes nobody
+  had re-checked (§8.26); the old `blackjack_deal` packet skipped `disabled_games`; the per-seat
+  twins no longer fall back to seat 0's money for a chair without a `Seat`; Ready becomes Cancel.
+  Three more game tests (33): `three_seats_survive_a_restart`, `lobby_rechecks_the_stakes`,
+  `shared_table_doubles_and_chips`.
 * **09-18, later** — seat 0's money follows seat 0: at a shared table whoever pressed Deal was
   `wagerOwner` and collected seat 0's payout and refund (reported from the table: the loser of a push
   collected the winner's stake). `three_seats_settle_apart` now deals from the last chair, which is
@@ -892,6 +905,35 @@ with it everything drawn next in that tick (a mine field's layout). Outcomes now
   restore ran before the value table existed (now rounded to the nearest item).
 * The slot machine refused a stack over its ceiling; it now takes up to the ceiling and re-arms.
 
+### 8.25 A restored shared hand paid chairs two and three into the void
+
+A shared hand interrupted by a save and a load (server stop, crash, Save and Quit, the chunk unloading
+because everyone walked off) was rebuilt and settled by `repairAfterLoad`, which then handed chairs
+two and three their winnings on the spot. But a block entity is loaded **before** the chunk gives it a
+level (§7, `LevelChunk.promotePendingBlockEntity`): `giveTo(UUID)` found no server to reach the
+mailbox, fell back to `dropOverflow`, which needs a world, and the items were simply gone. Seat 0 was
+safe only because its winnings wait in the shared buffer. The one restore test played seat 0 alone.
+
+Now the repair settles into each chair's own buffer (saved with the table) and `tick()` hands over any
+chair buffer outside a hand, on the first tick that has a world. Their stats and pot are booked with
+seat 0's through `restoredBookkeeping`. `giveTo` logs an error instead of swallowing items should it
+ever be reached without a world. `handOverSeat` only puts a card back in a box its owner still sits
+at. Regression: `three_seats_survive_a_restart`, which loads its copy exactly as a chunk does.
+
+**Lesson:** nothing that hands items to anyone may run during load. Write down what is owed, and
+deliver on the first tick. Every new "repair" must be read with "there is no level yet" in mind.
+
+### 8.26 The lobby dealt stakes nobody had checked
+
+Ready checked the box when it was pressed; the box could then change (changing it did not withdraw
+Ready, only emptying did) and the countdown or the last Ready dealt whatever was there: blacklisted,
+unpriced, too cheap, a card under one chip played as an item. `placeWager` re-checks every box; the
+lobby had lost that. Now Ready vouches for one exact stake, any change withdraws it, and `dealReady`
+checks every box again at the deal. Regression: `lobby_rechecks_the_stakes`.
+
+**Lesson:** check a stake at the moment it is committed, not at the moment someone said they would
+commit it.
+
 ---
 
 ## 9. Open items, in the order worth doing them
@@ -901,25 +943,32 @@ with it everything drawn next in that tick (a mine field's layout). Outcomes now
    happens. The cause was never read: no kept log shows it, and the one payload of ours sent on joining
    (`itemcasino:value_table`) round-trips exactly. If it comes back, the "Caused by" of its
    `latest.log` names the payload.
-1. **`run-client.bat`** (the game tests already passed). What to look at in game: a blackjack hand closed and reopened mid-hand (the cards come back); a duel with two unequal
+1. **`run-client.bat` with two players at one blackjack table** (LAN): the lobby (Deal alone, Ready and
+   Cancel, the 10 s countdown, the early deal, a watcher who never bets), a finished hand swept off the
+   felt, 15 s per move, a stake changed after Ready. Then the Upgrader's search (type a word with an E).
+   The game tests already passed. Also still to look at in game: a blackjack hand closed and reopened mid-hand (the cards come back); a duel with two unequal
    stakes (each chair shows its chance); the Cashier refusing cobblestone (and its (i)); a slot machine
    given a full stack (takes 16, says so, re-arms); Shift over any item (casino value); the item
    tooltips of the tables; a Game Core crafted and then a table built around it; the recipe book showing
    the tables; the log with no `derivation cycle` warning. Plus the 09-16 list in §4.
-2. **Screenshots for the README** (Rémi takes them with F2 in `run-client`; they land in
+2. **Release 0.3.0**: `run-release.bat` once item 1 is seen, tag `v0.3.0`, push the tag, then on
+   github.com a Release for each of `v0.1.0`, `v0.2.0` and `v0.3.0` with its jar and `.sha256` from
+   `releases/` and its CHANGELOG section (the README already sends players to that page).
+3. **Screenshots for the README** (Rémi takes them with F2 in `run-client`; they land in
    `run/screenshots`).
-3. **Design questions still open**: should losses bank 100 % into the pot, now that the Vault destroys
+4. **Design questions still open**: should losses bank 100 % into the pot, now that the Vault destroys
    half of each offering and the ambient jackpot is gone? Iron farms and villager emeralds still convert
    to diamonds at the Cashier (their base values: iron ≈ 13, emerald 96). A pocket slot machine was
    offered, never asked for.
-4. **Not done from the audit, by choice or scale** (each is a feature or a build change, not a bug):
+5. **Not done from the audit, by choice or scale** (each is a feature or a build change, not a bug):
    a strategy hint at blackjack; a visible state or orientation on the table blocks; per-player loss
    limits and permissions; splitting the game tests into their own source set so they stop shipping in
    the jar (needs ModDevGradle source-set surgery, best done with Gradle at hand).
-5. `tools/translations/fr_fr.json` is the last French translation, **not loaded and not maintained**
+6. `tools/translations/fr_fr.json` is the last French translation, **not loaded and not maintained**
    (several keys have changed since); delete it if Rémi confirms English only is permanent.
-6. `Claude outputs/` holds working files: the offline tarballs (regenerate them, do not trust old ones)
-   and `archive-2026-09-15/`. Nothing there is loaded, and git ignores it.
+7. `Claude outputs/` holds working files: the offline tarballs (regenerate them, do not trust old ones)
+   and `archive-2026-09-15/`. Nothing there is loaded, and git ignores it. The history as it was before
+   the 09-24 rewrite is in `backup/`, also ignored.
 
 ---
 

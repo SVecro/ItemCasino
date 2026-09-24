@@ -14,12 +14,19 @@ attached to the matching [GitHub release](https://github.com/SVecro/ItemCasino/r
   (`blackjack.lobby_seconds`), and the cards come out as soon as everyone with the table open is
   ready, or when the countdown ends, to whoever is ready by then. A player who never says ready sits
   the hand out and keeps their bet, so nobody who walked away stops the table or loses anything.
-- Pressing *Ready* again, emptying your box or closing the screen withdraws your *Ready*.
+- Pressing *Ready* again (the button then reads *Cancel*), any change to your box or your chip bet,
+  or closing the screen withdraws your *Ready*. Every stake is checked again when the cards come out.
 - 15 seconds per move in a hand shared by two or more chairs (`blackjack.shared_action_seconds`);
   a hand played alone keeps 60 (`blackjack.player_action_seconds`). A chair whose clock runs out
   stands, and play moves on.
 
 **Fixes**
+- A shared hand interrupted by a server stop, a crash or the chunk unloading lost what the second and
+  third chairs were owed when the table was loaded again. They are now paid on the first tick.
+- A stake changed after *Ready* was dealt in without being checked, so a blacklisted, unpriced or
+  too-cheap item, or a card under one chip, could be played. It is now checked at the deal; a chair
+  that fails sits the hand out and is told why.
+- The old `blackjack_deal` packet ignored `safety.disabled_games`.
 - At a shared table, the player who pressed *Deal* collected what the first chair was owed: its
   winnings, its refund and its stats. Seat 0's money now follows seat 0.
 - After a hand, the lobby's ready marks and countdown never showed: the finished hand stayed on the

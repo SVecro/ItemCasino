@@ -443,30 +443,46 @@ public abstract class CasinoSession {
      * so a solo table takes exactly the path it took before chairs existed.
      */
 
+    /*
+     * Seat 0 is the base fields; any other index is its Seat, or nothing at all. A chair that has no
+     * Seat object -- the duel's second chair, which predates them and keeps its own fields -- reads
+     * as empty and writes nowhere, rather than falling through to seat 0's money: a
+     * setEscrowOf(1, EMPTY) on a duel must never be able to wipe chair A's stake.
+     */
+
     protected ItemStack escrowOf(int index) {
+        if (index == 0) return escrow;
         Seat chair = seat(index);
-        return chair != null ? chair.escrow() : escrow;
+        return chair != null ? chair.escrow() : ItemStack.EMPTY;
     }
 
     protected void setEscrowOf(int index, ItemStack stack) {
-        Seat chair = seat(index);
-        if (chair != null) chair.setEscrow(stack); else escrow = stack;
+        if (index == 0) {
+            escrow = stack;
+        } else {
+            Seat chair = seat(index);
+            if (chair == null) return;
+            chair.setEscrow(stack);
+        }
         host.markDirty();
     }
 
     protected long stakeCentsOf(int index) {
+        if (index == 0) return stakeCents;
         Seat chair = seat(index);
-        return chair != null ? chair.stakeCents() : stakeCents;
+        return chair != null ? chair.stakeCents() : 0L;
     }
 
     protected long chipPayoutOf(int index) {
+        if (index == 0) return chipPayoutCents;
         Seat chair = seat(index);
-        return chair != null ? chair.chipPayoutCents() : chipPayoutCents;
+        return chair != null ? chair.chipPayoutCents() : 0L;
     }
 
     protected List<ItemStack> payoutOf(int index) {
+        if (index == 0) return List.copyOf(payout);
         Seat chair = seat(index);
-        return chair != null ? chair.peekPayout() : List.copyOf(payout);
+        return chair != null ? chair.peekPayout() : List.of();
     }
 
     /** True when the chair's committed stake is chips rather than items. */
@@ -557,17 +573,21 @@ public abstract class CasinoSession {
     protected void handOverSeat(int index) {
         Seat chair = seat(index);
         if (chair == null) return;
+        UUID owner = ownerOfSeat(index);
+        // The card goes back in the box it was bet from, so the next hand is one click away -- but
+        // only while its owner is the one sitting there. A box is whoever sits in the chair's, and a
+        // card left in the box of a chair someone else now holds would be theirs to take.
+        boolean ownerSits = owner != null && owner.equals(host.seatId(index));
         List<ItemStack> won = chair.takePayout();
-        // The card goes back in the box it was bet from, so the next hand is one click away.
         List<ItemStack> keep = new ArrayList<>(won.size());
         for (ItemStack stack : won) {
-            if (ChipCards.isCard(stack) && chair.stack().isEmpty()) {
+            if (ChipCards.isCard(stack) && ownerSits && chair.stack().isEmpty()) {
                 chair.quietly(() -> chair.slot().setItem(0, stack.copy()));
             } else {
                 keep.add(stack);
             }
         }
-        giveTo(ownerOfSeat(index), keep);
+        giveTo(owner, keep);
         host.markDirty();
     }
 
@@ -952,6 +972,21 @@ public abstract class CasinoSession {
             }
         }
         if (server != null && com.itemcasino.player.CasinoMailbox.send(server, owner, stacks)) return;
+        boolean noWorld;
+        try {
+            noWorld = host.hostLevel() == null;
+        } catch (RuntimeException e) {
+            noWorld = true;
+        }
+        if (noWorld) {
+            // Nothing can take them: no mailbox without a server, no floor without a world. This is
+            // what lost the other chairs' winnings when a shared hand was restored (a block entity
+            // loads before it has a level); every caller now waits for a tick instead. Should one
+            // ever get here again, it is said out loud rather than swallowed.
+            ItemCasino.LOGGER.error("Casino session {}: could not hand {} to {} -- no world yet",
+                    sessionId, stacks, owner);
+            return;
+        }
         for (ItemStack stack : stacks) {
             if (!stack.isEmpty()) host.dropOverflow(stack.copy());
         }

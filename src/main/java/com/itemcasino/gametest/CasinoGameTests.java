@@ -575,6 +575,210 @@ public final class CasinoGameTests {
     }
 
     /**
+     * A shared hand interrupted by a save and a load pays every chair, not just the first.
+     *
+     * <p>The regression for the audit of 2026-09-24, §2.1. The repair runs while the table is being
+     * loaded, before the chunk gives it a level; it used to hand chairs two and three their winnings
+     * right there, with no server to reach a mailbox and no world to drop anything in, and the
+     * items simply vanished. Now they wait in each chair's own saved buffer and go out on the first
+     * tick. The copy is loaded exactly as a chunk loads it -- no level -- and only then given one.
+     */
+    public static void threeSeatsSurviveARestart(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
+        BlackjackSession session = (BlackjackSession) table.session();
+        ServerPlayer[] players = new ServerPlayer[3];
+        for (int index = 0; index < 3; index++) players[index] = seat(helper, table);
+
+        for (int attempt = 0; attempt < 40; attempt++) {
+            for (int index = 0; index < 3; index++) {
+                players[index].getInventory().clearContent();
+                session.seatContainer(index).setItem(0, new ItemStack(Items.DIAMOND, 8));
+            }
+            commit(session, players[2], session.placeWager(players[2]));
+            if (session.gameState() == GameState.ROLLING && session.table() != null
+                    && session.table().phase() == BlackjackPhase.PLAYER_TURN) {
+                CompoundTag saved = table.saveWithFullMetadata(helper.getLevel().registryAccess());
+                BlockEntity loaded = BlockEntity.loadStatic(table.getBlockPos(), table.getBlockState(),
+                        saved, helper.getLevel().registryAccess());
+                check(loaded instanceof AbstractCasinoBlockEntity, "the table did not load back");
+                AbstractCasinoBlockEntity copy = (AbstractCasinoBlockEntity) loaded;
+                BlackjackSession restored = (BlackjackSession) copy.session();
+                check(restored.restoredHand() != null, "the shared hand was not rebuilt from its seed");
+
+                int[] owed = new int[3];
+                boolean neighbourOwed = false;
+                for (int index = 0; index < 3; index++) {
+                    com.itemcasino.core.game.blackjack.Settlement settled =
+                            restored.restoredHand().settlement(index);
+                    check(settled != null, "chair " + index + " was restored with no settlement");
+                    owed[index] = (int) (8L * settled.payNumerator() / settled.payDenominator());
+                    if (index > 0 && owed[index] > 0) neighbourOwed = true;
+                }
+                if (neighbourOwed) {
+                    // Given a world only now, as the chunk does; the first tick hands over.
+                    copy.setLevel(helper.getLevel());
+                    restored.tick();
+                    for (int index = 1; index < 3; index++) {
+                        long got = countIn(players[index], Items.DIAMOND)
+                                + mailboxCount(helper, players[index], Items.DIAMOND);
+                        check(got == owed[index], "chair " + index + " was owed " + owed[index]
+                                + " after the restart and received " + got);
+                    }
+                    check(totalOf(restored.peekPayout()) == owed[0],
+                            "chair 0 was owed " + owed[0] + " and holds " + totalOf(restored.peekPayout()));
+                    // A second tick hands nothing over twice.
+                    restored.tick();
+                    for (int index = 1; index < 3; index++) {
+                        long got = countIn(players[index], Items.DIAMOND)
+                                + mailboxCount(helper, players[index], Items.DIAMOND);
+                        check(got == owed[index], "chair " + index + " was paid twice: " + got);
+                    }
+                    helper.succeed();
+                    return;
+                }
+            }
+            // A natural settled at once, or nobody but chair 0 was owed anything: play it out and
+            // deal again, from an idle table.
+            int guard = 0;
+            while (session.table() != null && session.table().phase() == BlackjackPhase.PLAYER_TURN
+                    && guard++ < 16) {
+                int turn = session.table().turn();
+                check(session.act(players[turn], session.sessionId(), BlackjackAction.STAND),
+                        "chair " + turn + " could not stand");
+            }
+            revealHand(session);
+            session.takePayout();
+            for (int index = 0; index < 3; index++) session.seatContainer(index).setItem(0, ItemStack.EMPTY);
+        }
+        throw new IllegalStateException("itemcasino gametest: forty shared hands owed no neighbour anything");
+    }
+
+    /**
+     * A shared table deals only stakes it has just checked.
+     *
+     * <p>Two players looking. Changing a box after Ready withdraws it. And a stake that stops being
+     * acceptable without the box being touched -- a card drained under one chip -- is caught when
+     * the cards come out: that chair sits the hand out, keeps its card, and the other chair plays.
+     */
+    public static void lobbyRechecksTheStakes(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
+        BlackjackSession session = (BlackjackSession) table.session();
+        ServerPlayer[] players = new ServerPlayer[2];
+        for (int index = 0; index < 2; index++) {
+            players[index] = seat(helper, table);
+            players[index].getInventory().clearContent();
+            lookAt(helper, table, players[index]);
+        }
+        session.seatContainer(0).setItem(0, ChipCards.newCard(1_000));   // ten chips
+        session.setBet(players[0], 5);
+        session.seatContainer(1).setItem(0, new ItemStack(Items.DIAMOND, 8));
+
+        // A changed box withdraws Ready.
+        check(session.commitWager(players[1]), "the diamond chair could not say it was ready");
+        check(session.isReady(1), "Ready did not take");
+        check(session.gameState() == GameState.ARMED, "one Ready of two dealt the hand");
+        session.seatContainer(1).setItem(0, new ItemStack(Items.DIAMOND, 9));
+        check(!session.isReady(1), "a box changed after Ready was still ready");
+
+        // Chair 0 says ready on ten chips, then its card is drained without the box being touched.
+        check(session.commitWager(players[0]), "the card chair could not say it was ready");
+        check(session.isReady(0), "the card chair's Ready did not take");
+        ChipCards.setBalance(session.seatContainer(0).getItem(0), 50);   // half a chip
+        check(session.commitWager(players[1]), "the diamond chair could not say it was ready again");
+
+        check(session.gameState() == GameState.ROLLING, "the valid chair was not dealt");
+        check(session.table() != null && session.table().isPlaying(1), "the diamond chair was not dealt in");
+        check(!session.table().isPlaying(0), "a card under one chip was dealt in");
+        check(!session.isReady(0), "the refused chair was left ready");
+        ItemStack card = session.seatContainer(0).getItem(0);
+        check(ChipCards.isCard(card) && ChipCards.balance(card) == 50,
+                "the refused chair's card did not stay in its box untouched: " + card);
+        noViolation(table, "with one chair refused at the deal");
+        helper.succeed();
+    }
+
+    /**
+     * Doubling and chips at a shared table. Chair 0 bets chips, chair 1 bets diamonds and doubles
+     * with a second stack from its own inventory, chair 2 bets diamonds and stands. Each is paid
+     * exactly its own settlement: the collateral is taken from the doubling player alone, the card
+     * comes back to its own box with the right balance, and the table is left holding nothing.
+     */
+    public static void sharedTableDoublesAndChips(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
+        BlackjackSession session = (BlackjackSession) table.session();
+        ServerPlayer[] players = new ServerPlayer[3];
+        for (int index = 0; index < 3; index++) players[index] = seat(helper, table);
+
+        for (int attempt = 0; attempt < 40; attempt++) {
+            for (int index = 0; index < 3; index++) players[index].getInventory().clearContent();
+            session.seatContainer(0).setItem(0, ChipCards.newCard(10_000));   // a hundred chips
+            session.setBet(players[0], 10);
+            session.seatContainer(1).setItem(0, new ItemStack(Items.DIAMOND, 8));
+            session.seatContainer(2).setItem(0, new ItemStack(Items.DIAMOND, 8));
+            players[1].getInventory().add(new ItemStack(Items.DIAMOND, 8));   // the collateral
+
+            commit(session, players[2], session.placeWager(players[2]));
+            boolean doubled = false;
+            int guard = 0;
+            while (session.table() != null && session.table().phase() == BlackjackPhase.PLAYER_TURN
+                    && guard++ < 16) {
+                int turn = session.table().turn();
+                if (turn == 1 && !doubled
+                        && BlackjackAction.DOUBLE.isIn(session.legalMaskFor(players[1]))) {
+                    check(session.act(players[1], session.sessionId(), BlackjackAction.DOUBLE),
+                            "chair 1 could not double");
+                    doubled = true;
+                    check(countIn(players[1], Items.DIAMOND) == 0,
+                            "doubling did not take the second stack from the doubling player");
+                    check(countIn(players[0], Items.DIAMOND) == 0 && countIn(players[2], Items.DIAMOND) == 0,
+                            "doubling took something from a neighbour");
+                } else {
+                    check(session.act(players[turn], session.sessionId(), BlackjackAction.STAND),
+                            "chair " + turn + " could not stand");
+                }
+            }
+            com.itemcasino.core.game.blackjack.BlackjackTable finished = session.table();
+            check(finished != null, "the hand vanished before it could be settled");
+            if (!doubled) {
+                revealHand(session);
+                session.takePayout();
+                for (int index = 0; index < 3; index++) session.seatContainer(index).setItem(0, ItemStack.EMPTY);
+                continue;
+            }
+
+            com.itemcasino.core.game.blackjack.Settlement chipChair = finished.settlement(0);
+            com.itemcasino.core.game.blackjack.Settlement doubler = finished.settlement(1);
+            com.itemcasino.core.game.blackjack.Settlement stander = finished.settlement(2);
+            check(chipChair != null && doubler != null && stander != null, "a chair reached the end unsettled");
+            check(doubler.betUnits() == 2 || doubler.outcome() == Outcome.SURRENDER,
+                    "the double was not recorded on chair 1");
+            long chipsPaid = Chips.payout(1_000, chipChair.payNumerator(), chipChair.payDenominator());
+            long expectedBalance = 10_000 - 1_000 + chipsPaid;
+            int owedDoubler = (int) (8L * doubler.payNumerator() / doubler.payDenominator());
+            int owedStander = (int) (8L * stander.payNumerator() / stander.payDenominator());
+
+            revealHand(session);
+            check(session.gameState() != GameState.ROLLING, "the hand never settled");
+
+            ItemStack card = session.seatContainer(0).getItem(0);
+            check(ChipCards.isCard(card) && ChipCards.balance(card) == expectedBalance,
+                    "the chip chair's card came back with " + ChipCards.balance(card)
+                            + " cents, not " + expectedBalance + " (" + chipChair.outcome() + ")");
+            long doublerGot = countIn(players[1], Items.DIAMOND) + mailboxCount(helper, players[1], Items.DIAMOND);
+            check(doublerGot == owedDoubler, "the doubler was owed " + owedDoubler + " (" + doubler.outcome()
+                    + ") and received " + doublerGot);
+            long standerGot = countIn(players[2], Items.DIAMOND) + mailboxCount(helper, players[2], Items.DIAMOND);
+            check(standerGot == owedStander, "the stander was owed " + owedStander + " (" + stander.outcome()
+                    + ") and received " + standerGot);
+            check(!session.hasLiveWager(), "the table still holds a wager after the hand");
+            noViolation(table, "after a shared hand with a double and chips");
+            helper.succeed();
+            return;
+        }
+        throw new IllegalStateException("itemcasino gametest: chair 1 never got to double in forty hands");
+    }
+
+    /**
      * Gives a mock player the table's screen, the way opening it for real would: a live menu on
      * this session, and standing at the table so the menu stays valid.
      */

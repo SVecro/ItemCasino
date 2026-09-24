@@ -140,7 +140,7 @@ On Windows, use `gradlew.bat`, or the scripts at the root:
 
 - **Unit tests** (JUnit, `src/test/java`): the pure-Java core, which has no Minecraft imports: odds,
   wheel maths, blackjack rules, dice, mines, chips, the session state machine.
-- **Game tests** (`runGameTestServer`): 30 tests that run inside a real server. They cover escrow,
+- **Game tests** (`runGameTestServer`): 33 tests that run inside a real server. They cover escrow,
   payouts, duels, the Cashier, breaking tables, restarts mid-game and the three-seat blackjack table.
   The log counts one more test than that: Minecraft's own `always_pass`.
 

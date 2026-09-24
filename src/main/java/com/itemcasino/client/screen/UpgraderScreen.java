@@ -559,10 +559,22 @@ public class UpgraderScreen extends AbstractCasinoScreen<UpgraderMenu> {
         return true;
     }
 
+    /**
+     * While the search field has the focus, every key belongs to it. A container screen otherwise
+     * reads a letter as a key binding before the field sees it as text: E (the inventory key)
+     * closed the table in the middle of a word, Q dropped the hovered item, and a digit swapped it
+     * with the hotbar. The letters themselves still arrive through {@code charTyped}, which does not
+     * depend on this answer -- the same rule the creative inventory's search box follows.
+     */
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (pickerOpen && event.key() == InputConstants.KEY_ESCAPE) {
             togglePicker();
+            return true;
+        }
+        if (search != null && search.isVisible() && search.isFocused()
+                && event.key() != InputConstants.KEY_ESCAPE) {
+            search.keyPressed(event);   // backspace, arrows, select-all, paste
             return true;
         }
         return super.keyPressed(event);

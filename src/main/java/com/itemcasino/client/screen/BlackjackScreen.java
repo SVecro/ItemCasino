@@ -70,10 +70,12 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
 
     @Override
     protected String wagerLabelKey() {
-        // At a shared table the button does not deal, it says you are ready to play what is in your
-        // box. The dealer deals when everyone with a bet down has said so, or when the clock runs
-        // out on those who have not.
-        return menu.seatCount() > 1 ? "itemcasino.button.ready" : "itemcasino.button.deal";
+        // With someone else at the table the button does not deal, it says you are ready to play
+        // what is in your box: the dealer deals when everyone looking has said so, or when the
+        // countdown runs out. Alone, it deals, as it always has.
+        if (menu.seatCount() <= 1) return "itemcasino.button.deal";
+        int others = menu.readout(BlackjackSession.READOUT_PRESENT) & ~(1 << menu.seatIndex());
+        return others != 0 ? "itemcasino.button.ready" : "itemcasino.button.deal";
     }
 
     @Override
@@ -276,7 +278,8 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
     }
 
     /**
-     * Between hands: who has said they are ready, and how long the others have to join them.
+     * Between hands: who is at the table, who has said they are ready, and how long the others
+     * have to join them.
      *
      * <p>Drawn in the same three columns the hands use, so a chair is in the same place whether it
      * is holding cards or deciding whether to. Names are not sent while the table is idle, so a
@@ -286,10 +289,13 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
         int seats = menu.seatCount();
         int[] places = BlackjackMenu.seatsAround(menu.seatIndex(), seats);
         int readyMask = menu.readout(BlackjackSession.READOUT_READY);
+        int presentMask = menu.readout(BlackjackSession.READOUT_PRESENT);
         for (int place = 0; place < 3; place++) {
             int seat = places[place];
             if (seat < 0) continue;
             boolean isReady = (readyMask & (1 << seat)) != 0;
+            // An empty chair says nothing: "Betting" under it would be a player who is not there.
+            if (!isReady && (presentMask & (1 << seat)) == 0 && seat != menu.seatIndex()) continue;
             boolean mine = seat == menu.seatIndex();
             Component word = Component.translatable(isReady
                     ? "itemcasino.label.seat_ready" : "itemcasino.label.seat_waiting");

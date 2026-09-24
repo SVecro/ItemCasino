@@ -47,8 +47,10 @@ to win it is at the Vault, and every win is announced in chat.
 **Also in the box**
 
 - **Blackjack for three.** One shoe, one dealer, each chair playing in turn and settling on its own.
-  Between hands the table waits until everyone who has placed a bet presses *Ready*, with a
-  20-second countdown so that nobody who walked away can hold up the table.
+  Alone at the table, *Deal* deals. When others have the table open too, the button says *Ready*:
+  the first *Ready* starts a 10-second countdown, and the cards come out as soon as everyone at the
+  table is ready, or when it ends, to whoever is ready by then. During a shared hand each player has
+  15 seconds per move, so nobody who walked away can hold up the table.
 - **Pocket devices**: an Upgrader, a Dice and a Blackjack table you carry in your inventory.
 - **Game Core**, the part every table is built on.
 - **Stats** for every player (the `$` button in the inventory) and a **mailbox** for winnings that
@@ -138,7 +140,7 @@ On Windows, use `gradlew.bat`, or the scripts at the root:
 
 - **Unit tests** (JUnit, `src/test/java`): the pure-Java core, which has no Minecraft imports: odds,
   wheel maths, blackjack rules, dice, mines, chips, the session state machine.
-- **Game tests** (`runGameTestServer`): 28 tests that run inside a real server. They cover escrow,
+- **Game tests** (`runGameTestServer`): 30 tests that run inside a real server. They cover escrow,
   payouts, duels, the Cashier, breaking tables, restarts mid-game and the three-seat blackjack table.
   The log counts one more test than that: Minecraft's own `always_pass`.
 

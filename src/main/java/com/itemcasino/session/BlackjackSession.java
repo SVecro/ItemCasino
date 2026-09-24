@@ -105,9 +105,14 @@ public class BlackjackSession extends CasinoSession {
         this.ready = new boolean[seats()];
     }
 
-    /** Read-out 0: who is ready, as a bitmask. Read-out 1: seconds left on the countdown. */
+    /**
+     * Read-out 0: who is ready, as a bitmask. Read-out 1: seconds left on the countdown. Read-out 2:
+     * which chairs have their player looking at the table, as a bitmask — the screen says Deal when
+     * you are the only one, Ready when you are not.
+     */
     public static final int READOUT_READY = 0;
     public static final int READOUT_COUNTDOWN = 1;
+    public static final int READOUT_PRESENT = 2;
 
     @Override
     public int readout(int index) {
@@ -117,7 +122,27 @@ public class BlackjackSession extends CasinoSession {
             return mask;
         }
         if (index == READOUT_COUNTDOWN) return countdownSeconds();
+        if (index == READOUT_PRESENT) return presentMask();
         return 0;
+    }
+
+    /**
+     * The chairs whose player has this table's screen open right now. "At the table" means looking
+     * at it: a chair is released when its player closes the screen between hands, so a chair that is
+     * not looking has nothing in its box to wait for.
+     */
+    public int presentMask() {
+        int mask = 0;
+        for (int index = 0; index < seats(); index++) if (isLooking(index)) mask |= 1 << index;
+        return mask;
+    }
+
+    private boolean isLooking(int index) {
+        try {
+            return host.seatedPlayer(index) != null;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     private int countdownSeconds() {
@@ -196,6 +221,7 @@ public class BlackjackSession extends CasinoSession {
         int index = seatIndex(player);
         if (index >= 0 && index < ready.length && state.acceptsItems()) {
             ready[index] = false;
+            if (!anyReady()) readyDeadlineTick = 0;
             host.markDirty();
         }
         super.onMenuClosed(player);
@@ -272,10 +298,12 @@ public class BlackjackSession extends CasinoSession {
     /**
      * The lobby: a chair says it is ready to play what is in its box.
      *
-     * <p>The first one to say so starts a countdown. The hand is dealt when every chair with a bet
-     * down is ready, or when the countdown runs out, to whoever is ready by then. Pressing again
-     * takes the word back, which is why a chair can change its mind right up until the cards come
-     * out. A chair that says nothing simply sits the hand out with its bet still in its box.
+     * <p>A player alone at the table — nobody else has it open — is dealt at once: there is nobody
+     * to wait for. With two or more looking, the first Ready starts a countdown
+     * ({@code blackjack.lobby_seconds}, 10 by default). The cards come out as soon as everyone with
+     * the table open is ready, or when the countdown runs out, to whoever is ready by then. Pressing
+     * again takes the word back, which is why a chair can change its mind right up until the cards
+     * come out. A chair that says nothing simply sits the hand out with its bet still in its box.
      *
      * <p>Only at a table that seats more than one. A pocket device deals the moment you press it.
      */
@@ -296,14 +324,18 @@ public class BlackjackSession extends CasinoSession {
         if (!checkStakeAt(player, index, snapshot)) return false;
 
         ready[index] = !ready[index];
-        if (ready[index] && readyDeadlineTick == 0) {
-            readyDeadlineTick = host.hostLevel().getGameTime()
-                    + CasinoConfig.SERVER.readySeconds.get() * 20L;
-        }
-        if (!anyReady()) readyDeadlineTick = 0;
         host.markDirty();
         touch();
-        if (everyBetIsReady()) return startHand(player, readySeats(), snapshot);
+        // Alone at the table there is nobody to wait for: the button deals, as it does at one chair.
+        if (ready[index] && Integer.bitCount(presentMask() & ~(1 << index)) == 0) {
+            return startHand(player, readySeats(), snapshot);
+        }
+        if (ready[index] && readyDeadlineTick == 0) {
+            readyDeadlineTick = host.hostLevel().getGameTime()
+                    + CasinoConfig.SERVER.lobbySeconds.get() * 20L;
+        }
+        if (!anyReady()) readyDeadlineTick = 0;
+        if (everyoneLookingIsReady()) return startHand(player, readySeats(), snapshot);
         return true;
     }
 
@@ -312,13 +344,17 @@ public class BlackjackSession extends CasinoSession {
         return false;
     }
 
-    /** Every chair with something in its box has said it is ready, and at least one has. */
-    private boolean everyBetIsReady() {
+    /**
+     * Everyone with the table open has said they are ready, and at least one chair is ready with a
+     * bet. A player who is looking without betting holds the cards back until the countdown ends:
+     * they may be about to put something down, and the countdown is how long they have to do it.
+     */
+    private boolean everyoneLookingIsReady() {
         boolean any = false;
         for (int index = 0; index < seats(); index++) {
-            if (slotStackOf(index).isEmpty()) continue;
-            if (!ready[index]) return false;
-            any = true;
+            boolean betting = ready[index] && !slotStackOf(index).isEmpty();
+            if (isLooking(index) && !betting) return false;
+            if (betting) any = true;
         }
         return any;
     }
@@ -362,11 +398,15 @@ public class BlackjackSession extends CasinoSession {
         return deal(initiator, playing);
     }
 
-    /** The countdown runs on the server, so a client that never reports back cannot stall a table. */
+    /**
+     * The countdown runs on the server, so a client that never reports back cannot stall a table.
+     * It also ends early when the last player who was not ready walks away: everyone still looking
+     * is then ready, and nobody is left to wait for.
+     */
     @Override
     public void tick() {
         if (seats() > 1 && state == GameState.ARMED && readyDeadlineTick > 0
-                && host.hostLevel().getGameTime() >= readyDeadlineTick) {
+                && (host.hostLevel().getGameTime() >= readyDeadlineTick || everyoneLookingIsReady())) {
             boolean[] playing = readySeats();
             readyDeadlineTick = 0;
             boolean any = false;
@@ -957,8 +997,18 @@ public class BlackjackSession extends CasinoSession {
     }
 
     private void resetActionDeadline() {
-        deadlineTick = host.hostLevel().getGameTime()
-                + CasinoConfig.SERVER.playerActionSeconds.get() * 20L;
+        deadlineTick = host.hostLevel().getGameTime() + decisionSeconds() * 20L;
+    }
+
+    /**
+     * How long a chair has for each decision in the current hand. Short when two or more chairs play
+     * it, because the others wait on every one of them; longer for a hand played alone, where the
+     * clock only guards against a player who walked off.
+     */
+    public int decisionSeconds() {
+        return Integer.bitCount(handPlaying) > 1
+                ? CasinoConfig.SERVER.sharedActionSeconds.get()
+                : CasinoConfig.SERVER.playerActionSeconds.get();
     }
 
     @Override

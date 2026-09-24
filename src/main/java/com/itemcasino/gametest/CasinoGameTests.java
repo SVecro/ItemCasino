@@ -1,5 +1,6 @@
 package com.itemcasino.gametest;
 
+import com.itemcasino.CasinoConfig;
 import com.itemcasino.block.AbstractCasinoBlockEntity;
 import com.itemcasino.core.game.GameState;
 import com.itemcasino.core.game.SessionMachine;
@@ -435,11 +436,13 @@ public final class CasinoGameTests {
      * was dropped on the floor of a method rather than the floor of the world.
      */
     /**
-     * The lobby: the dealer waits for every bet on the table to say it is ready.
+     * The lobby with three players looking at the table.
      *
-     * <p>Without this, any chair could deal while a neighbour was still choosing what to bet -- and
-     * that is not a small annoyance, it is how the first shared table paid a neighbour's refund to
-     * whoever reached the button first.
+     * <p>Two bet, the third only watches. The first Ready starts the countdown and does not deal;
+     * pressing it again takes the word back and stops the countdown. With both bettors ready the
+     * cards still wait, because the third player is looking and has not said ready. When that
+     * player walks away, everyone still looking is ready, and the next tick deals: to the two chairs
+     * that said so, never to the empty one, and on the short clock of a shared hand.
      */
     public static void lobbyWaitsForEveryBet(GameTestHelper helper) {
         AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
@@ -448,9 +451,11 @@ public final class CasinoGameTests {
         for (int index = 0; index < 3; index++) {
             players[index] = seat(helper, table);
             players[index].getInventory().clearContent();
+            lookAt(helper, table, players[index]);
         }
+        check(session.presentMask() == 0b111,
+                "three players looking read as " + Integer.toBinaryString(session.presentMask()));
 
-        // Two chairs bet; the third sits the hand out and must not hold the table up.
         session.seatContainer(0).setItem(0, new ItemStack(Items.DIAMOND, 8));
         session.seatContainer(1).setItem(0, new ItemStack(Items.DIAMOND, 8));
         check(session.gameState() == GameState.ARMED, "two bets did not arm the table");
@@ -458,26 +463,132 @@ public final class CasinoGameTests {
         check(session.commitWager(players[0]), "the first chair could not say it was ready");
         check(session.isReady(0), "saying ready did not take");
         check(session.gameState() == GameState.ARMED,
-                "the hand started with one bet still deciding");
+                "the hand started while the others were still deciding");
+        int seconds = session.readout(BlackjackSession.READOUT_COUNTDOWN);
+        check(seconds > 0 && seconds <= CasinoConfig.SERVER.lobbySeconds.get(),
+                "the first Ready did not start the countdown (it reads " + seconds + ")");
 
-        // Pressing again takes the word back, so a chair can change its mind until the cards come out.
+        // Pressing again takes the word back, and with nobody ready the countdown stops.
         check(session.commitWager(players[0]), "the first chair could not take its word back");
         check(!session.isReady(0), "pressing ready twice did not take it back");
+        check(session.readout(BlackjackSession.READOUT_COUNTDOWN) == 0,
+                "the countdown kept running with nobody ready");
         check(session.gameState() == GameState.ARMED, "taking a word back started the hand");
 
+        // Both bettors ready -- but the third player is looking and has not said so.
         check(session.commitWager(players[0]), "the first chair could not say it was ready again");
         check(session.commitWager(players[1]), "the second chair could not say it was ready");
-        check(session.gameState() == GameState.ROLLING,
-                "the hand did not start once every bet was ready");
+        check(session.gameState() == GameState.ARMED,
+                "the hand started while a player at the table had not said ready");
 
-        check(session.table() != null, "the hand started without a table");
-        check(session.table().isPlaying(0) && session.table().isPlaying(1),
-                "a chair that was ready was not dealt in");
-        check(!session.table().isPlaying(2), "the empty chair was dealt in");
-        check(!session.isReady(0) && !session.isReady(1),
-                "the ready flags survived into the hand");
-        noViolation(table, "with a hand dealt from the lobby");
+        // The third walks away: nobody left to wait for.
+        lookAway(players[2]);
+        helper.runAfterDelay(2, () -> {
+            check(session.gameState() == GameState.ROLLING,
+                    "the hand did not start once everyone looking was ready");
+            check(session.table() != null, "the hand started without a table");
+            check(session.table().isPlaying(0) && session.table().isPlaying(1),
+                    "a chair that was ready was not dealt in");
+            check(!session.table().isPlaying(2), "the empty chair was dealt in");
+            check(!session.isReady(0) && !session.isReady(1),
+                    "the ready flags survived into the hand");
+            check(session.decisionSeconds() == CasinoConfig.SERVER.sharedActionSeconds.get(),
+                    "a hand for two ran on a " + session.decisionSeconds() + "-second clock");
+            noViolation(table, "with a hand dealt from the lobby");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A player alone at a three-chair table is dealt at once: there is nobody to wait for, so the
+     * button deals exactly as it does at one chair, with no countdown, and the hand runs on the
+     * longer clock of a hand nobody else is waiting on.
+     */
+    public static void lobbyAloneDealsAtOnce(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
+        BlackjackSession session = (BlackjackSession) table.session();
+        check(session.seats() == 3, "a blackjack table seated " + session.seats() + " and not three");
+        ServerPlayer player = seat(helper, table);
+        player.getInventory().clearContent();
+        lookAt(helper, table, player);
+        check(session.presentMask() == 0b001,
+                "one player looking read as " + Integer.toBinaryString(session.presentMask()));
+
+        session.seatContainer(0).setItem(0, new ItemStack(Items.DIAMOND, 8));
+        check(session.commitWager(player), "a player alone at the table could not deal");
+        check(session.gameState() == GameState.ROLLING, "a player alone at the table was made to wait");
+        check(session.readout(BlackjackSession.READOUT_COUNTDOWN) == 0,
+                "a countdown started with nobody to wait for");
+        check(session.table() != null && session.table().isPlaying(0), "the player was not dealt in");
+        check(!session.table().isPlaying(1) && !session.table().isPlaying(2),
+                "an empty chair was dealt in");
+        check(session.decisionSeconds() == CasinoConfig.SERVER.playerActionSeconds.get(),
+                "a hand played alone ran on a " + session.decisionSeconds() + "-second clock");
+        noViolation(table, "with a hand dealt to a player alone");
+
+        // Play it out, so the test leaves a table holding nothing.
+        int guard = 0;
+        while (session.table() != null
+                && session.table().phase() == BlackjackPhase.PLAYER_TURN && guard++ < 8) {
+            check(session.act(player, session.sessionId(), BlackjackAction.STAND),
+                    "the player could not stand");
+        }
+        revealHand(session);
+        check(session.gameState() != GameState.ROLLING, "the hand never settled");
         helper.succeed();
+    }
+
+    /**
+     * Two players looking, one ready: when the countdown runs out, the cards go to the one who
+     * said so. The other sits the hand out and keeps every item of its bet in its box.
+     */
+    public static void lobbyCountdownDealsTheReady(GameTestHelper helper) {
+        AbstractCasinoBlockEntity table = place(helper, CasinoBlocks.BLACKJACK_TABLE.get());
+        BlackjackSession session = (BlackjackSession) table.session();
+        ServerPlayer[] players = new ServerPlayer[2];
+        for (int index = 0; index < 2; index++) {
+            players[index] = seat(helper, table);
+            players[index].getInventory().clearContent();
+            lookAt(helper, table, players[index]);
+        }
+        session.seatContainer(0).setItem(0, new ItemStack(Items.DIAMOND, 8));
+        session.seatContainer(1).setItem(0, new ItemStack(Items.DIAMOND, 8));
+
+        check(session.commitWager(players[0]), "the first chair could not say it was ready");
+        check(session.gameState() == GameState.ARMED,
+                "the hand started with the second player still deciding");
+        check(session.readout(BlackjackSession.READOUT_COUNTDOWN) > 0, "no countdown started");
+
+        long wait = CasinoConfig.SERVER.lobbySeconds.get() * 20L + 5L;
+        helper.runAfterDelay(wait, () -> {
+            check(session.gameState() == GameState.ROLLING, "the countdown ran out and nobody was dealt");
+            check(session.table() != null && session.table().isPlaying(0),
+                    "the chair that said ready was not dealt in");
+            check(!session.table().isPlaying(1), "a chair that never said ready was dealt in");
+            ItemStack kept = session.seatContainer(1).getItem(0);
+            check(kept.is(Items.DIAMOND) && kept.getCount() == 8,
+                    "the chair that sat out kept " + kept + " of its 8 diamonds");
+            check(session.seatContainer(0).getItem(0).isEmpty(), "the dealt chair's stake never left its box");
+            noViolation(table, "with a hand dealt by the countdown");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Gives a mock player the table's screen, the way opening it for real would: a live menu on
+     * this session, and standing at the table so the menu stays valid.
+     */
+    private static void lookAt(GameTestHelper helper, AbstractCasinoBlockEntity table, ServerPlayer player) {
+        BlockPos at = helper.absolutePos(TABLE);
+        player.snapTo(at.getX() + 0.5D, at.getY() + 1.0D, at.getZ() + 1.5D);
+        player.containerMenu = table.createMenu(100 + table.session().seatIndex(player),
+                player.getInventory(), player);
+    }
+
+    /** Closes that screen through the menu's own teardown, as the close packet would. */
+    private static void lookAway(ServerPlayer player) {
+        player.containerMenu.removed(player);
+        player.containerMenu = player.inventoryMenu;
     }
 
     /**

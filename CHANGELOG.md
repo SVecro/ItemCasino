@@ -9,12 +9,15 @@ attached to the matching [GitHub release](https://github.com/SVecro/ItemCasino/r
 - A Blackjack table seats up to three players against one dealer and one shoe. The chairs act in
   turn, and each settles on its own. You see your neighbours' bets and cards; your own hand is always
   the one in front of you. The pocket Blackjack still seats one.
-- A lobby between hands: at a shared table the button reads *Ready*, not *Deal*. The first *Ready*
-  starts a countdown (20 seconds, `blackjack.ready_seconds`). The cards come out when every chair with
-  a bet is ready, or when the countdown ends. A chair that never says ready sits the hand out and keeps
-  its bet, so a player who walked away never stops the table and never loses anything.
-- Changing your bet, pressing *Ready* again or closing the screen withdraws your *Ready*.
-- A chair that lets its turn clock run out stands, and play moves on.
+- A lobby between hands. Alone at the table, *Deal* deals at once. When two or more players have the
+  table open, the button reads *Ready*: the first *Ready* starts a 10-second countdown
+  (`blackjack.lobby_seconds`), and the cards come out as soon as everyone with the table open is
+  ready, or when the countdown ends, to whoever is ready by then. A player who never says ready sits
+  the hand out and keeps their bet, so nobody who walked away stops the table or loses anything.
+- Pressing *Ready* again, emptying your box or closing the screen withdraws your *Ready*.
+- 15 seconds per move in a hand shared by two or more chairs (`blackjack.shared_action_seconds`);
+  a hand played alone keeps 60 (`blackjack.player_action_seconds`). A chair whose clock runs out
+  stands, and play moves on.
 
 **Fixes**
 - At a shared table, the player who pressed *Deal* collected what the first chair was owed: its

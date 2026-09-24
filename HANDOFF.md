@@ -9,7 +9,7 @@ beside the project on the author's disk, not in the repository.
   **https://github.com/SVecro/ItemCasino** — Minecraft **1.21.11**, NeoForge **21.11.42**,
   Java **21**, Gradle **9.2.1**, ModDevGradle **2.0.141**, Parchment `2025.12.20`.
 * Mod id `itemcasino`, root package `com.itemcasino`, `mod_version` `0.3.0` (not yet released).
-* 164 Java files in `src/main` (201 classes), 16 in `src/test`, 28 registered game tests.
+* 164 Java files in `src/main` (201 classes), 16 in `src/test`, 30 registered game tests.
 * **The project is a git repository on Rémi's disk** (since 2026-09-17), pushed to GitHub by Rémi
   himself (§2.4). Commit there with `device_bash` at the end of each batch (§2.3), as
   `Vecro <193068253+SVecro@users.noreply.github.com>` — the repository's local git config already says
@@ -33,7 +33,7 @@ beside the project on the author's disk, not in the repository.
    on the device, stage `Claude outputs/offline-src.tgz` and `Claude outputs/offline-jars.tar`, then in
    the sandbox: `mkdir -p ~/ic && cd ~/ic && tar xzf <src.tgz> && bash tools/offline/setup.sh <jars.tar>`
    and `bash tools/offline/check.sh`. Expect **ALL CHECKS PASSED** (201 classes, 0 `[removal]`
-   warnings, JUnit 88/88, CoreSelfTest 158/158, 0 overrides, 28 game tests paired, 0 static problems).
+   warnings, JUnit 88/88, CoreSelfTest 158/158, 0 overrides, 30 game tests paired, 0 static problems).
 5. Compare `bash tools/offline/tree-hash.sh` in the sandbox with the same script on the device. Equal
    means you are working on exactly what is on his disk.
 6. Then ask Rémi what he wants, or propose the top of §9.
@@ -279,14 +279,32 @@ the chip-card hints (tables and Cashier), the game in English on a French client
 
 **Network version 7** — the two blackjack payloads changed shape to carry every chair.
 
-### The lobby at a shared table (09-24)
+### The lobby at a shared table (09-24, reworked the same evening)
 
-At a table with more than one chair the button says **Ready**, not Deal. The first Ready starts a
-countdown (`blackjack.ready_seconds`, 20 by default, 5–300); the hand is dealt when every chair with a
-bet down is ready, or when the countdown runs out, to whoever is ready by then. A silent chair sits
-the hand out with its bet still in its box. Ready again, changing the box, or closing the screen
-withdraws the word; everything resets after each hand. The countdown runs on the server. Game test:
-`lobby_waits_for_every_bet`. *(Not yet seen in game.)*
+Rémi's rule, after comparing with the Blackjack Activity on Discord (ScoreSpace: up to 8 players,
+everyone plays at once, the dealer plays when all have stood — he chose to **keep turns**):
+
+* **"At the table" means looking at it**: `BlackjackSession.presentMask()` is the chairs whose player
+  has this table's screen open (`host.seatedPlayer(i) != null`). It is read-out 2
+  (`READOUT_PRESENT`), so the screen can say **Deal** when you are alone and **Ready** when you are not,
+  and leave an empty chair blank instead of "Betting".
+* **Alone** (no other chair looking): the button deals at once, no countdown — whatever other boxes
+  hold.
+* **Two or more looking**: the first Ready starts `blackjack.lobby_seconds` (10, 3–300). The cards come
+  out as soon as **everyone looking** is ready — a player looking without a bet holds them back until
+  the countdown ends, since that is their time to bet — or when it runs out, to whoever is ready.
+  `tick()` re-checks this every tick, so the last undecided player walking away deals at once.
+* Ready again, emptying the box, or closing the screen withdraws the word (changing the stack in the
+  box does not); a countdown with nobody ready left is cleared. Everything resets after each hand.
+* **Clock per decision**: `blackjack.shared_action_seconds` (15) when two or more chairs were dealt in,
+  `blackjack.player_action_seconds` (60) for a hand played alone — `decisionSeconds()`.
+* The old key `ready_seconds` was renamed `lobby_seconds` on purpose: a config file already written
+  with 20 would otherwise have kept 20.
+
+Game tests: `lobby_waits_for_every_bet` (three looking, one watching without a bet),
+`lobby_alone_deals_at_once`, `lobby_countdown_deals_the_ready`. The mock players get a real menu
+(`lookAt`: `table.createMenu(...)` assigned to `containerMenu`, standing at the table so `stillValid`
+holds) and leave through the menu's own `removed()` (`lookAway`). *(Not yet seen in game.)*
 
 ### Blackjack seats three
 
@@ -326,7 +344,9 @@ History, newest first (the details live in the code comments and in §8):
 * **09-24** — the lobby (above). Then the publication batch: public README, `CHANGELOG.md`,
   `.gitattributes` and `gradlew` made executable, the `.bat` files on `gradlew.bat`, mod metadata
   (`displayURL`, `issueTrackerURL`, `logoFile`, author Vecro), GitHub Actions, history rewritten before
-  the first push (§2.4). The audits and the session prompts left the repository.
+  the first push (§2.4). The audits and the session prompts left the repository. First CI run green.
+  Then the lobby reworked (above): alone deals at once, 10 s when two or more are looking, early deal
+  when everyone looking is ready, 15 s per decision in a shared hand; two more game tests (30).
 * **09-18, later** — seat 0's money follows seat 0: at a shared table whoever pressed Deal was
   `wagerOwner` and collected seat 0's payout and refund (reported from the table: the loser of a push
   collected the winner's stake). `three_seats_settle_apart` now deals from the last chair, which is
@@ -868,13 +888,11 @@ with it everything drawn next in that tick (a mine field's layout). Outcomes now
 
 ## 9. Open items, in the order worth doing them
 
-0. **The new-world disconnect.** Reported: creating a new world disconnects the client with
-   `Failed to decode packet 'clientbound/minecraft:custom_payload'`; joining it again works. Nobody has
-   read the trace. What is known (2026-09-24): no log kept in `run/logs` (09-13 → 09-24) contains it, so
-   it was probably seen in another instance; the only payload of ours sent on joining is
-   `itemcasino:value_table` (at `OnDatapackSyncEvent`, play phase), and its codec round-trips 1 517
-   entries, extreme values and an empty table exactly, with no bytes left over. Get the full
-   `latest.log` of a run that shows it before releasing — its "Caused by" names the payload.
+0. **The new-world disconnect — gone.** Reported earlier as `Failed to decode packet
+   'clientbound/minecraft:custom_payload'` on creating a world; on 2026-09-24 Rémi reported it no longer
+   happens. The cause was never read: no kept log shows it, and the one payload of ours sent on joining
+   (`itemcasino:value_table`) round-trips exactly. If it comes back, the "Caused by" of its
+   `latest.log` names the payload.
 1. **`run-client.bat`** (the game tests already passed). What to look at in game: a blackjack hand closed and reopened mid-hand (the cards come back); a duel with two unequal
    stakes (each chair shows its chance); the Cashier refusing cobblestone (and its (i)); a slot machine
    given a full stack (takes 16, says so, re-arms); Shift over any item (casino value); the item

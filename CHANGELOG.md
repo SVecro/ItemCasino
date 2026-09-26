@@ -3,7 +3,15 @@
 Versions follow `mod_version` in `gradle.properties`. Each release is tagged `vX.Y.Z` and its jar is
 attached to the matching [GitHub release](https://github.com/SVecro/ItemCasino/releases).
 
-## 0.3.0 — unreleased
+## 1.0.0 — unreleased
+
+The first stable release. Everything below was worked on as 0.3.0, which never shipped on its own.
+
+**In French too.** The mod is translated into French, and follows the language each player's game is
+set to. Every other language still reads English.
+
+**Leaner jar.** The in-game test suite no longer ships in the jar players download; it lives in a
+source set of its own and still runs on every build.
 
 **Blackjack seats three.**
 - A Blackjack table seats up to three players against one dealer and one shoe. The chairs act in

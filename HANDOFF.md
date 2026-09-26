@@ -8,15 +8,20 @@ beside the project on the author's disk, not in the repository.
 * Project: a folder on Rémi's Windows machine (`get_device_info` names it) and the public repository
   **https://github.com/SVecro/ItemCasino** — Minecraft **1.21.11**, NeoForge **21.11.42**,
   Java **21**, Gradle **9.2.1**, ModDevGradle **2.0.141**, Parchment `2025.12.20`.
-* Mod id `itemcasino`, root package `com.itemcasino`, `mod_version` `0.3.0` (not yet released).
+* Mod id `itemcasino`, root package `com.itemcasino`, `mod_version` `1.0.0` (not yet released; 0.3.0 was folded into it).
 * 164 Java files in `src/main` (201 classes), 16 in `src/test`, 33 registered game tests.
 * **The project is a git repository on Rémi's disk** (since 2026-09-17), pushed to GitHub by Rémi
   himself (§2.4). Commit there with `device_bash` at the end of each batch (§2.3), as
   `Vecro <193068253+SVecro@users.noreply.github.com>` — the repository's local git config already says
   so. Never commit with a personal address.
-* **Languages.** Rémi writes in French: **answer him in French.** The **mod itself is English only**
-  (his request): `en_us.json` is the only language file loaded. Code, comments, commit-style notes and
-  this file stay in English.
+* **Languages.** Rémi writes in French: **answer him in French.** The **mod ships English and French**
+  (his request, 2026-09-26): `en_us.json` is the reference, `fr_fr.json` must carry exactly its keys
+  and placeholders (`static_checks.py` enforces it). Any key added to one is added to the other in
+  the same commit. French labels run wider than English and nothing in the UI shrinks text to fit a
+  button, so keep them short. Code, comments, commit-style notes and this file stay in English.
+* **The game tests are their own source set**, `src/gametest` (java and resources), since 2026-09-26,
+  so the released jar carries none of them. `ItemCasino.registerGameTests` finds them by name and
+  does without them when absent; `runGameTestServer` runs on their classpath.
 
 ---
 
@@ -964,8 +969,8 @@ commit it.
    a strategy hint at blackjack; a visible state or orientation on the table blocks; per-player loss
    limits and permissions; splitting the game tests into their own source set so they stop shipping in
    the jar (needs ModDevGradle source-set surgery, best done with Gradle at hand).
-6. `tools/translations/fr_fr.json` is the last French translation, **not loaded and not maintained**
-   (several keys have changed since); delete it if Rémi confirms English only is permanent.
+6. French is loaded and maintained since 2026-09-26 (`assets/itemcasino/lang/fr_fr.json`); the old
+   `tools/translations/` copy is gone. Its labels have not been seen in game yet.
 7. `Claude outputs/` holds working files: the offline tarballs (regenerate them, do not trust old ones)
    and `archive-2026-09-15/`. Nothing there is loaded, and git ignores it. The history as it was before
    the 09-24 rewrite is in `backup/`, also ignored.

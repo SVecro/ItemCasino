@@ -11,8 +11,18 @@ base { archivesName = mod_id }
 // Mojang ships Java 21 to end users in 1.21.11, so mods must target Java 21.
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
+// The game tests live in a source set of their own, so the jar players download carries none of
+// them: `jar` packs `main` only. They are still part of the mod in every run (see `mods` below), and
+// the game-test server runs on their classpath. ItemCasino finds them by name, and does without
+// them when they are absent.
+sourceSets {
+    gametest
+}
+
 neoForge {
     version = project.neo_version
+
+    addModdingDependenciesTo sourceSets.gametest
 
     parchment {
         mappingsVersion = project.parchment_mappings_version
@@ -31,6 +41,7 @@ neoForge {
         }
         gameTestServer {
             type = "gameTestServer"
+            sourceSet = sourceSets.gametest
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
         configureEach {
@@ -44,17 +55,20 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            sourceSet(sourceSets.gametest)
         }
     }
 }
 
 
-// The game-test datapack entries ship. A `test_instance` entry whose schema is even slightly wrong
-// fails to parse, and a mod's built-in datapack that fails to parse stops the world from loading at
-// all -- so these are only allowed in once `runGameTestServer` has actually loaded and run them.
-// They are inert in a normal game: nothing references a test function unless a test is started.
+// The game-test datapack entries (src/gametest/resources) are loaded in every dev run. A
+// `test_instance` entry whose schema is even slightly wrong fails to parse, and a built-in datapack
+// that fails to parse stops the world from loading at all -- so these are only allowed in once
+// `runGameTestServer` has actually loaded and run them. They never reach the released jar.
 
 dependencies {
+    gametestImplementation sourceSets.main.output
+
     testImplementation platform("org.junit:junit-bom:5.11.4")
     testImplementation "org.junit.jupiter:junit-jupiter"
     testRuntimeOnly   "org.junit.platform:junit-platform-launcher"

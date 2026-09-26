@@ -103,7 +103,7 @@ each pocket device once you hold its table.
 3. Put it in the `mods` folder, **on the server and on every client**: the mod adds blocks and
    items, so both sides need it.
 
-The mod is in English.
+The mod is in English and French: it follows the language each player's game is set to.
 
 ## Configuring
 

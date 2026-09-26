@@ -1,6 +1,5 @@
 package com.itemcasino;
 
-import com.itemcasino.gametest.CasinoTestFunctions;
 import com.itemcasino.registry.CasinoBlockEntities;
 import com.itemcasino.registry.CasinoBlocks;
 import com.itemcasino.registry.CasinoCreativeTab;
@@ -41,9 +40,7 @@ public final class ItemCasino {
         CasinoMenus.REGISTER.register(modBus);
 
         CasinoCreativeTab.REGISTER.register(modBus);
-        // Registered unconditionally: the registry exists on every side, and the tests only run
-        // when neoforge.enabledGameTestNamespaces names this mod.
-        CasinoTestFunctions.REGISTER.register(modBus);
+        registerGameTests(modBus);
 
         // Explicitly, not by annotation: @EventBusSubscriber has no bus selector any more, and this
         // one has to land on the mod bus rather than the game bus.
@@ -57,6 +54,26 @@ public final class ItemCasino {
 
         // Game-bus handlers (ValuationEngine, CasinoCommands, CasinoEvents) register themselves
         // through @EventBusSubscriber; registering them here as well would double-fire everything.
+    }
+
+    /**
+     * The game tests are a source set of their own (src/gametest) and are not in the released jar,
+     * so they are looked up by name: present in a dev run, where they register on every side and
+     * only run when neoforge.enabledGameTestNamespaces names this mod; absent for players, where
+     * there is nothing to register.
+     */
+    private static void registerGameTests(IEventBus modBus) {
+        Class<?> functions;
+        try {
+            functions = Class.forName("com.itemcasino.gametest.CasinoTestFunctions");
+        } catch (ClassNotFoundException absent) {
+            return;
+        }
+        try {
+            functions.getMethod("register", IEventBus.class).invoke(null, modBus);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Item Casino: the game tests are present but could not register", e);
+        }
     }
 
     public static Identifier id(String path) {

@@ -157,4 +157,9 @@ public final class CasinoTestFunctions {
 
     private CasinoTestFunctions() {}
 
+    /** Called by name from {@code ItemCasino}, which cannot see this source set. */
+    public static void register(net.neoforged.bus.api.IEventBus modBus) {
+        REGISTER.register(modBus);
+    }
+
 }

@@ -3,6 +3,7 @@
 
 * every JSON under src/main/resources parses;
 * every translation key the Java code names exists in en_us.json, and every block and item has a name;
+* every other language file has exactly en_us.json's keys, with the same placeholders;
 * every registered game-test function has a test_instance JSON and the other way round (a function
   without its instance never runs, and the suite still says "all passed");
 * no net.minecraft.client import outside com.itemcasino.client (a dedicated server would crash);
@@ -19,9 +20,11 @@ import glob, json, pathlib, re, sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 JAVA = ROOT / 'src/main/java'
 RES = ROOT / 'src/main/resources'
+GT_JAVA = ROOT / 'src/gametest/java'
+GT_RES = ROOT / 'src/gametest/resources'
 problems = []
 
-for f in sorted(RES.rglob('*.json')):
+for f in sorted(list(RES.rglob('*.json')) + list(GT_RES.rglob('*.json'))):
     try:
         json.loads(f.read_text(encoding='utf-8'))
     except Exception as e:
@@ -43,9 +46,9 @@ for name, prefix in (('CasinoBlocks', 'block'), ('CasinoItems', 'item')):
             problems.append(f'missing name: {prefix}.itemcasino.{m.group(1)}')
 
 functions = set(re.findall(r'REGISTER\.register\("([a-z0-9_]+)"',
-                           (JAVA / 'com/itemcasino/gametest/CasinoTestFunctions.java').read_text(encoding='utf-8')))
+                           (GT_JAVA / 'com/itemcasino/gametest/CasinoTestFunctions.java').read_text(encoding='utf-8')))
 instances = {}
-for f in (RES / 'data/itemcasino/test_instance').glob('*.json'):
+for f in (GT_RES / 'data/itemcasino/test_instance').glob('*.json'):
     instances[f.stem] = json.loads(f.read_text(encoding='utf-8')).get('function', '')
 for fn in sorted(functions):
     if f'itemcasino:{fn}' not in instances.values():
@@ -76,6 +79,21 @@ DYNAMIC = (r'^itemcasino\.button\.(hit|stand|double|surrender)$', r'^itemcasino\
 for key in sorted(set(lang) - used):
     if not any(re.search(p, key) for p in DYNAMIC):
         problems.append(f'unused translation: {key}')
+
+# Every language file carries exactly en_us's keys, with the same placeholders: a missing key shows
+# its raw name in game, and a lost %s drops a number.
+PLACEHOLDER = re.compile(r'%(?:\d+\$)?s|%%')
+for f in sorted((RES / 'assets/itemcasino/lang').glob('*.json')):
+    if f.name == 'en_us.json':
+        continue
+    other = json.loads(f.read_text(encoding='utf-8'))
+    for key in sorted(set(lang) - set(other)):
+        problems.append(f'{f.name}: missing {key}')
+    for key in sorted(set(other) - set(lang)):
+        problems.append(f'{f.name}: {key} is not in en_us.json')
+    for key in sorted(set(lang) & set(other)):
+        if sorted(PLACEHOLDER.findall(lang[key])) != sorted(PLACEHOLDER.findall(other[key])):
+            problems.append(f'{f.name}: {key} does not carry the placeholders of en_us.json')
 
 merged = ROOT / '.offline/merged-jar.txt'
 if merged.exists():

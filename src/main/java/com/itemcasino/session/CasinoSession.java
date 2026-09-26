@@ -450,6 +450,17 @@ public abstract class CasinoSession {
      * setEscrowOf(1, EMPTY) on a duel must never be able to wipe chair A's stake.
      */
 
+    /**
+     * Whether any chair has a stake in escrow. At a shared table seat 0 may sit a hand out while
+     * the others play, so seat 0's escrow alone does not say whether the table holds a wager.
+     */
+    public boolean holdsAnyEscrow() {
+        for (int index = 0; index < seats(); index++) {
+            if (!escrowOf(index).isEmpty()) return true;
+        }
+        return false;
+    }
+
     protected ItemStack escrowOf(int index) {
         if (index == 0) return escrow;
         Seat chair = seat(index);
@@ -728,7 +739,7 @@ public abstract class CasinoSession {
     }
 
     protected void audit() {
-        String violation = SessionMachine.violation(state, !escrow.isEmpty(), !payout.isEmpty(),
+        String violation = SessionMachine.violation(state, holdsAnyEscrow(), !payout.isEmpty(),
                 host.seatedPlayer() != null || host.isSeated(null));
         if (violation != null && !escrow.isEmpty()) {
             ItemCasino.LOGGER.debug("Casino invariant note (session {}): {}", sessionId, violation);

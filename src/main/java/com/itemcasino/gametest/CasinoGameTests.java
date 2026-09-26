@@ -75,7 +75,7 @@ public final class CasinoGameTests {
     private static void noViolation(AbstractCasinoBlockEntity table, String where) {
         CasinoSession session = table.session();
         String violation = SessionMachine.violation(session.gameState(),
-                !session.escrowView().isEmpty(), !session.peekPayout().isEmpty(),
+                session.holdsAnyEscrow(), !session.peekPayout().isEmpty(),
                 table.seat() != null);
         check(violation == null, where + ": " + violation);
     }

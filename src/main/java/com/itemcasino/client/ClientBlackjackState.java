@@ -303,6 +303,11 @@ public final class ClientBlackjackState {
         return !playerHand.isEmpty() && clock.landed(false, 0);
     }
 
+    /** At least one of the dealer's cards has landed, whether or not this client holds a hand. */
+    public static boolean dealerAnyLanded() {
+        return !dealerVisible.isEmpty() && clock.landed(true, 0);
+    }
+
     // ------------------------------------------------------------------ accessors
 
     public static List<Card> playerHand() { return playerHand; }

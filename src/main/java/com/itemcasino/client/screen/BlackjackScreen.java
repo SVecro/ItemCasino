@@ -82,6 +82,17 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
         return mineReady ? "itemcasino.button.not_ready" : "itemcasino.button.ready";
     }
 
+    /**
+     * The table is ARMED as soon as any chair has something in its box, so the base screen would
+     * light the button for a player whose own box is empty. At a shared table that player cannot
+     * say Ready (the server refuses an empty box), so the button says nothing it cannot do.
+     */
+    @Override
+    protected boolean canWager() {
+        if (menu.seatCount() <= 1) return true;
+        return menu.seatIndex() >= 0 && !menu.slots.get(menu.ownWagerSlot()).getItem().isEmpty();
+    }
+
     @Override
     protected void init() {
         super.init();
@@ -360,10 +371,13 @@ public class BlackjackScreen extends AbstractCasinoScreen<BlackjackMenu> {
     protected void renderReadouts(GuiGraphics graphics) {
         // The totals count the cards that have landed, and nothing that is still in the shoe or face
         // down: a total that already knew the dealer's last card would give the hand away.
+        // The dealer's total waits for the dealer's own first card, not the viewer's: a spectator,
+        // or a chair sitting the hand out, has no cards and would otherwise read "--" all hand.
         boolean dealt = ClientBlackjackState.anyLanded();
+        boolean dealerDealt = ClientBlackjackState.dealerAnyLanded();
         gauge(graphics, CasinoLayout.LEFT_GAUGE_X - 2, DEALER_Y + 4, 46,
                 Component.translatable("itemcasino.label.dealer"),
-                Component.literal(!dealt ? "--" : ClientBlackjackState.shownDealerTotal()
+                Component.literal(!dealerDealt ? "--" : ClientBlackjackState.shownDealerTotal()
                         + (ClientBlackjackState.dealerHasHiddenCard() ? "+?" : "")),
                 CasinoPanel.TEXT_CREAM);
         // At a shared table this gauge would sit exactly where the left-hand chair's cards go, and

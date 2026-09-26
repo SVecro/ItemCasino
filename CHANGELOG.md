@@ -31,6 +31,10 @@ attached to the matching [GitHub release](https://github.com/SVecro/ItemCasino/r
   winnings, its refund and its stats. Seat 0's money now follows seat 0.
 - After a hand, the lobby's ready marks and countdown never showed: the finished hand stayed on the
   felt until the next one was dealt. It is now swept away (below).
+- At a shared blackjack table, a player with an empty box saw *Ready* lit as soon as a neighbour
+  had a stake; pressing it did nothing. The button now stays dark until your own box holds a stake.
+- A spectator, or a chair sitting the hand out, saw "--" as the dealer's total all hand: the gauge
+  waited for the viewer's own first card. It now follows the dealer's cards.
 - Typing in the Upgrader's search box: E closed the table, Q dropped the hovered item and digits
   swapped it with the hotbar. The box now keeps every key while it has the focus.
 

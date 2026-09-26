@@ -8,7 +8,7 @@ beside the project on the author's disk, not in the repository.
 * Project: a folder on Rémi's Windows machine (`get_device_info` names it) and the public repository
   **https://github.com/SVecro/ItemCasino** — Minecraft **1.21.11**, NeoForge **21.11.42**,
   Java **21**, Gradle **9.2.1**, ModDevGradle **2.0.141**, Parchment `2025.12.20`.
-* Mod id `itemcasino`, root package `com.itemcasino`, `mod_version` `1.0.0` (not yet released; 0.3.0 was folded into it).
+* Mod id `itemcasino`, root package `com.itemcasino`, `mod_version` `1.0.0`, released 2026-09-26 (0.3.0 was folded into it, never shipped).
 * 164 Java files in `src/main` (201 classes), 16 in `src/test`, 33 registered game tests.
 * **The project is a git repository on Rémi's disk** (since 2026-09-17), pushed to GitHub by Rémi
   himself (§2.4). Commit there with `device_bash` at the end of each batch (§2.3), as
@@ -269,14 +269,13 @@ validated; `build` with JUnit in 1 min 36 s from a cold cache, Minecraft decompi
 `runGameTestServer` in 27 s; 2 min 23 s in all; jar artifact 632 KB. GitHub notes that `ubuntu-latest`
 moves to Ubuntu 26 from 2026-10-19: if a run breaks after that date, pin `runs-on: ubuntu-24.04`.
 
-**Released: 0.2.0** — git tag `v0.2.0`, jar in `releases/itemcasino-0.2.0.jar`
-(`b15f13bf5b4be514f32ab29aab67204ff97909b7665c268ed87a547166551cb1`) with its `.sha256`. 0.1.0 is still
-beside it. `releases/` is git-ignored.
-
-**`releases/itemcasino-0.3.0.jar` is not the release yet.** Rémi rebuilt it on 2026-09-24 at 19:35 from
-`7cec03b` (`88c076c9…`, 30 test instances, lobby and Upgrader search in): it has no sweep and it still
-carries the restore bug of the 09-24 audit (§8.25). The 0.3.0 that ships comes from `run-release.bat`
-after those commits, once the new behaviour has been seen in game; it overwrites this one.
+**Released: 1.0.0** (2026-09-26) — git tag `v1.0.0`, jar in `releases/itemcasino-1.0.0.jar`
+(`18751ee4f5d7307ea40856881632e24d1a061729585063017725c7d204f0bdef`) with its `.sha256`, built by
+`run-release.bat` from `ad9540b` ("All 34 required tests passed" = 33 of ours + vanilla's
+always_pass). The jar was opened before release: 371 entries, no `gametest` class, no
+`test_instance`, no structure; `en_us.json` and `fr_fr.json`; version 1.0.0. CI green on the same
+commit. 0.1.0 and 0.2.0 are still beside it. `releases/itemcasino-0.3.0.jar` is a build that never
+shipped: ignore it. `releases/` is git-ignored.
 
 **Releasing is one `.bat` now.** Bump `mod_version` in `gradle.properties`, then `run-release.bat`:
 it builds, runs the game tests, and copies `build/libs/itemcasino-<version>.jar` into `releases/`

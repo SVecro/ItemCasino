@@ -3,7 +3,7 @@
 Versions follow `mod_version` in `gradle.properties`. Each release is tagged `vX.Y.Z` and its jar is
 attached to the matching [GitHub release](https://github.com/SVecro/ItemCasino/releases).
 
-## 1.0.0 — unreleased
+## 1.0.0 — 2026-09-26
 
 The first stable release. Everything below was worked on as 0.3.0, which never shipped on its own.
 
